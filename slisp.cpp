@@ -4,6 +4,7 @@
 #include <assert.h>
 #include <functional>
 #include <iostream>
+#include <list>
 #include <memory>
 #include <numeric>
 #include <queue>
@@ -90,21 +91,23 @@ namespace slisp
 
   using Value = std::variant< ExpressionType, std::string, int, Error >;
 
-  class SyntaxTree
+  class SValue;
+  using Cells = std::vector< std::unique_ptr< SValue > >;
+
+  class SValue
   {
   public:
-    class Node
-    {
-    public:
-      Node() = default;
-      Node( Value v ) : value( std::move( v ) )
-      {}
-      Value value;
-      std::vector< std::unique_ptr< Node > > children;
-    };
-
-    std::unique_ptr< Node > root;
+    SValue() = default;
+    SValue( Value v ) : value( std::move( v ) )
+    {}
+    Value value;
+    Cells children;
   };
+
+  using SValueIt = std::vector< std::unique_ptr< SValue > >::iterator;
+  using SValueConstIt = std::vector< std::unique_ptr< SValue > >::const_iterator;
+
+  using Root = std::unique_ptr< SValue >;
 
   Value readValue( const std::string& text )
   {
@@ -118,11 +121,11 @@ namespace slisp
     }
   }
 
-  std::unordered_map< const SyntaxTree::Node*, std::size_t > getDepths( const SyntaxTree& t )
+  std::unordered_map< const SValue*, std::size_t > getDepths( const Root& r )
   {
-    std::unordered_map< const SyntaxTree::Node*, std::size_t > depths;
-    std::queue< const SyntaxTree::Node* > traversal;
-    traversal.push( t.root.get() );
+    std::unordered_map< const SValue*, std::size_t > depths;
+    std::queue< const SValue* > traversal;
+    traversal.push( r.get() );
     std::size_t level = 0;
     std::size_t queuedCount = 0;
     while ( !traversal.empty() )
@@ -140,7 +143,7 @@ namespace slisp
         level += 1;
       }
 
-      const SyntaxTree::Node* n = traversal.front();
+      const SValue* n = traversal.front();
       traversal.pop();
       depths[ n ] = level;
 
@@ -159,14 +162,14 @@ namespace slisp
     return o;
   }
 
-  std::ostream& operator<<( std::ostream& o, const SyntaxTree& t )
+  std::ostream& operator<<( std::ostream& o, const Root& r )
   {
-    std::stack< const SyntaxTree::Node* > traversal;
-    const std::unordered_map< const SyntaxTree::Node*, std::size_t > depths = getDepths( t );
-    traversal.push( t.root.get() );
+    std::stack< const SValue* > traversal;
+    const std::unordered_map< const SValue*, std::size_t > depths = getDepths( r );
+    traversal.push( r.get() );
     while ( !traversal.empty() )
     {
-      const SyntaxTree::Node* n = traversal.top();
+      const SValue* n = traversal.top();
       traversal.pop();
 
       const std::string padding( depths.at( n ) * 2, ' ' );
@@ -181,7 +184,7 @@ namespace slisp
   }
 
   template < typename IteratorT >
-  SyntaxTree parse( IteratorT begin, IteratorT end )
+  Root parse( IteratorT begin, IteratorT end )
   {
     const std::string validSymbolics = "_+-*\\/=<>!&";
 
@@ -193,8 +196,8 @@ namespace slisp
 
     auto it = begin;
 
-    std::stack< std::unique_ptr< SyntaxTree::Node > > traversal;
-    traversal.push( std::make_unique< SyntaxTree::Node >( ExpressionType() ) ); // Represents program
+    std::stack< std::unique_ptr< SValue > > traversal;
+    traversal.push( std::make_unique< SValue >( ExpressionType() ) ); // Represents program
 
     while ( it != end )
     {
@@ -206,7 +209,7 @@ namespace slisp
         const unsigned char c = *it;
         if ( c == '(' )
         {
-          traversal.push( std::make_unique< SyntaxTree::Node >( ExpressionType() ) );
+          traversal.push( std::make_unique< SValue >( ExpressionType() ) );
         }
 
         else if ( isValidSymbol( c ) )
@@ -222,7 +225,7 @@ namespace slisp
 
           for ( const std::string& s : lineSplitter( line ) )
           {
-            auto child = std::make_unique< SyntaxTree::Node >( readValue( s ) );
+            auto child = std::make_unique< SValue >( readValue( s ) );
             parent->children.push_back( std::move( child ) );
           }
 
@@ -231,7 +234,7 @@ namespace slisp
 
         else if ( c == ')' )
         {
-          std::unique_ptr< SyntaxTree::Node > top = std::move( traversal.top() );
+          std::unique_ptr< SValue > top = std::move( traversal.top() );
           traversal.pop();
 
           if ( !traversal.empty() )
@@ -248,83 +251,113 @@ namespace slisp
       }
     }
 
-    SyntaxTree t;
-
     if ( traversal.size() != 1 ) // Only Program node should exist at the end.
     {
       throw std::runtime_error( "Mismatched parens" );
     }
 
-    t.root = std::move( traversal.top() );
+    Root r = std::move( traversal.top() );
     traversal.pop();
-    return t;
+    return r;
   }
 
-  Value evalOp( const std::string& op, const Value& x, const Value& y )
+  std::unique_ptr< SValue >& evaluate( std::unique_ptr< SValue >& s );
+
+  std::unique_ptr< SValue >& evalOp( const std::string& op, SValueIt begin, SValueIt end )
   {
-    auto evalIntegral = [ &x, &y ]( auto opFunctor ) -> Value {
-      auto xval = std::get_if< int >( &x );
-      auto yval = std::get_if< int >( &y );
-      return xval && yval ? Value( opFunctor( *xval, *yval ) ) : Value( Error( "Arguments are not integral" ) );
+    const bool allIntegral = std::all_of(
+      begin, end, []( const std::unique_ptr< SValue >& s ) { return std::get_if< int >( &s->value ) != nullptr; } );
+
+    if ( !allIntegral )
+    {
+      ( *begin )->value = Error( "Not all arguments are integral" );
+      return ( *begin );
+    }
+
+    // Negation
+    if ( op == "-" && ( end - begin == 1 ) )
+    {
+      ( *begin )->value = -std::get< int >( ( *begin )->value );
+      return ( *begin );
+    }
+
+    auto integralOperator = [ &op ]() -> std::function< Value( const Value&, const std::unique_ptr< SValue >& ) > {
+      if ( op == "+" )
+      {
+        return []( const Value& x, const std::unique_ptr< SValue >& y ) {
+          return Value( std::get< int >( x ) + std::get< int >( y->value ) );
+        };
+      }
+      if ( op == "-" )
+      {
+        return []( const Value& x, const std::unique_ptr< SValue >& y ) {
+          return Value( std::get< int >( x ) - std::get< int >( y->value ) );
+        };
+      }
+      if ( op == "*" )
+      {
+        return []( const Value& x, const std::unique_ptr< SValue >& y ) {
+          return Value( std::get< int >( x ) * std::get< int >( y->value ) );
+        };
+      }
+      if ( op == "/" )
+      {
+        return []( const Value& x, const std::unique_ptr< SValue >& y ) {
+          if ( std::get_if< Error >( &x ) )
+          {
+            return x; // Propagate error.
+          }
+          int yint = std::get< int >( y->value );
+          return yint == 0 ? Value( Error( "Division by zero" ) ) : Value( std::get< int >( x ) / yint );
+        };
+      }
+
+      return []( const Value& x, const std::unique_ptr< SValue >& y ) { return Value( Error( "Unknown operator" ) ); };
     };
 
-    if ( op == "+" )
-    {
-      return evalIntegral( std::plus< int >() );
-    }
-    if ( op == "-" )
-    {
-      return evalIntegral( std::minus< int >() );
-    }
-    if ( op == "*" )
-    {
-      return evalIntegral( std::multiplies< int >() );
-    }
-    if ( op == "/" )
-    {
-      auto xval = std::get_if< int >( &x );
-      auto yval = std::get_if< int >( &y );
-      if ( xval && yval )
-      {
-        return *yval != 0 ? Value( *xval / *yval ) : Value( Error( "Division by zero" ) );
-      }
-      return Value( Error( "Arguments are not integral" ) );
-    }
-
-    throw std::runtime_error( "Unsupported operator" );
-    return 0;
+    ( *begin )->value = std::accumulate( begin + 1, end, ( *begin )->value, integralOperator() );
+    return *begin;
   }
 
-  Value evaluate( const SyntaxTree::Node* node )
+  std::unique_ptr< SValue >& evaluateSexpr( std::unique_ptr< SValue >& s )
   {
-    // Atom.
-    if ( node->children.empty() )
+    for ( auto& child : s->children )
     {
-      return node->value;
+      child->value = evaluate( child )->value;
+      child->children.clear(); // Done with this - memory can be freed.
+    }
+
+    // Atom.
+    if ( s->children.empty() )
+    {
+      return s;
     }
 
     // nested superfluous expressions. e.g. ( (+ 1 2) )
-    if ( node->children.size() == 1 )
+    if ( s->children.size() == 1 )
     {
-      // Should only occur in expression nesting.
-      assert( std::get_if< ExpressionType >( &node->value ) );
-
-      // Go next level.
-      return evaluate( node->children.front().get() );
+      return s->children.front();
     }
 
-    const auto& op = std::get< std::string >( node->children[ 0 ]->value );
-
-    // Evaluate first argument.
-    Value result = evaluate( node->children[ 1 ].get() );
-
-    // Evaluate the rest of the arguments.
-    for ( int i = 2; i < node->children.size(); ++i )
+    if ( auto op = std::get_if< std::string >( &s->children[ 0 ]->value ) )
     {
-      result = evalOp( op, result, evaluate( node->children[ i ].get() ) );
+      return evalOp( *op, s->children.begin() + 1, s->children.end() );
+    }
+    else
+    {
+      s->value = Error( "Unsupported operator" );
+      return s;
+    }
+  }
+
+  std::unique_ptr< SValue >& evaluate( std::unique_ptr< SValue >& s )
+  {
+    if ( std::get_if< ExpressionType >( &s->value ) )
+    {
+      return evaluateSexpr( s );
     }
 
-    return result;
+    return s;
   }
 
   class InteractiveEvaluator
@@ -350,9 +383,13 @@ namespace slisp
         {
           try
           {
-            SyntaxTree t = parse( input.cbegin(), input.cend() );
-            //out << t << '\n';
-            out << evaluate( t.root.get() ) << '\n';
+            Root root = parse( input.cbegin(), input.cend() );
+            out << root << '\n';
+
+            auto& result = evaluate( root );
+            out << result->value << '\n';
+
+            out << root << '\n';
           }
           catch ( const std::exception& e )
           {

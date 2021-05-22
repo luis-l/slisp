@@ -102,6 +102,56 @@ namespace slisp
     {}
     Value value;
     Cells children;
+
+    template < typename UnaryOp >
+    void traversePreorder( UnaryOp f ) const
+    {
+      std::stack< const SValue* > traversal;
+      traversal.push( this );
+      while ( !traversal.empty() )
+      {
+        const SValue* n = traversal.top();
+        traversal.pop();
+        f( *n );
+        for ( const auto& child : n->children )
+        {
+          traversal.push( child.get() );
+        }
+      }
+    }
+
+    template < typename BinaryOp >
+    void traverseLevelOrder( BinaryOp f )
+    {
+      std::queue< const SValue* > traversal;
+      traversal.push( this );
+      std::size_t level = 0;
+      std::size_t queuedCount = 0;
+      while ( !traversal.empty() )
+      {
+        // Keep dequeuing from the current level.
+        if ( queuedCount > 0 )
+        {
+          queuedCount -= 1;
+        }
+
+        // Once we dequeued the entire level, we go down a level.
+        if ( queuedCount == 0 )
+        {
+          queuedCount = traversal.size();
+          level += 1;
+        }
+
+        const SValue* n = traversal.front();
+        traversal.pop();
+        f( *n, level );
+
+        for ( const auto& child : n->children )
+        {
+          traversal.push( child.get() );
+        }
+      }
+    }
   };
 
   using SValueIt = std::vector< std::unique_ptr< SValue > >::iterator;
@@ -124,34 +174,7 @@ namespace slisp
   std::unordered_map< const SValue*, std::size_t > getDepths( const Root& r )
   {
     std::unordered_map< const SValue*, std::size_t > depths;
-    std::queue< const SValue* > traversal;
-    traversal.push( r.get() );
-    std::size_t level = 0;
-    std::size_t queuedCount = 0;
-    while ( !traversal.empty() )
-    {
-      // Keep dequeuing from the current level.
-      if ( queuedCount > 0 )
-      {
-        queuedCount -= 1;
-      }
-
-      // Once we dequeued the entire level, we go down a level.
-      if ( queuedCount == 0 )
-      {
-        queuedCount = traversal.size();
-        level += 1;
-      }
-
-      const SValue* n = traversal.front();
-      traversal.pop();
-      depths[ n ] = level;
-
-      for ( const auto& child : n->children )
-      {
-        traversal.push( child.get() );
-      }
-    }
+    r->traverseLevelOrder( [ &depths ]( const SValue& v, std::size_t level ) { depths[ &v ] = level; } );
     return depths;
   }
 
@@ -164,21 +187,12 @@ namespace slisp
 
   std::ostream& operator<<( std::ostream& o, const Root& r )
   {
-    std::stack< const SValue* > traversal;
     const std::unordered_map< const SValue*, std::size_t > depths = getDepths( r );
-    traversal.push( r.get() );
-    while ( !traversal.empty() )
-    {
-      const SValue* n = traversal.top();
-      traversal.pop();
 
-      const std::string padding( depths.at( n ) * 2, ' ' );
-      o << padding << "value: '" << n->value << "'\n";
-      for ( const auto& child : n->children )
-      {
-        traversal.push( child.get() );
-      }
-    }
+    r->traversePreorder( [ &depths, &o ]( const SValue& v ) {
+      const std::string padding( depths.at( &v ) * 2, ' ' );
+      o << padding << "value: '" << v.value << "'\n";
+    } );
 
     return o;
   }
@@ -341,7 +355,9 @@ namespace slisp
 
     if ( auto op = std::get_if< std::string >( &s->children.front()->value ) )
     {
-      return evalOp( *op, s->children.begin() + 1, s->children.end() );
+      s->value = evalOp( *op, s->children.begin() + 1, s->children.end() )->value;
+      s->children.clear();
+      return s;
     }
     else
     {
@@ -384,11 +400,13 @@ namespace slisp
           try
           {
             Root root = parse( input.cbegin(), input.cend() );
+            out << "Evaluation Tree\n";
             out << root << '\n';
 
             auto& result = evaluate( root );
             out << result->value << '\n';
 
+            out << "Evaluation Tree\n";
             out << root << '\n';
           }
           catch ( const std::exception& e )
@@ -402,7 +420,6 @@ namespace slisp
     std::ostream& out = std::cout;
     std::istream& in = std::cin;
   };
-
 }
 
 int main()

@@ -2,6 +2,7 @@
 #include "slisp.h"
 
 #include <assert.h>
+#include <functional>
 #include <iostream>
 #include <memory>
 #include <numeric>
@@ -77,7 +78,17 @@ namespace slisp
     return o << "expr";
   }
 
-  using Value = std::variant< ExpressionType, std::string, int >;
+  struct Error
+  {
+    std::string message;
+  };
+
+  std::ostream& operator<<( std::ostream& o, const Error& e )
+  {
+    return o << e.message;
+  }
+
+  using Value = std::variant< ExpressionType, std::string, int, Error >;
 
   class SyntaxTree
   {
@@ -249,44 +260,47 @@ namespace slisp
     return t;
   }
 
-  int evalOp( const std::string& op, const int x, const int y )
+  Value evalOp( const std::string& op, const Value& x, const Value& y )
   {
+    auto evalIntegral = [ &x, &y ]( auto opFunctor ) -> Value {
+      auto xval = std::get_if< int >( &x );
+      auto yval = std::get_if< int >( &y );
+      return xval && yval ? Value( opFunctor( *xval, *yval ) ) : Value( Error( "Arguments are not integral" ) );
+    };
+
     if ( op == "+" )
     {
-      return x + y;
+      return evalIntegral( std::plus< int >() );
     }
     if ( op == "-" )
     {
-      return x - y;
+      return evalIntegral( std::minus< int >() );
     }
     if ( op == "*" )
     {
-      return x * y;
+      return evalIntegral( std::multiplies< int >() );
     }
     if ( op == "/" )
     {
-      if ( y == 0 )
+      auto xval = std::get_if< int >( &x );
+      auto yval = std::get_if< int >( &y );
+      if ( xval && yval )
       {
-        throw std::domain_error( "Division by zero." );
+        return *yval != 0 ? Value( *xval / *yval ) : Value( Error( "Division by zero" ) );
       }
-
-      return x / y;
+      return Value( Error( "Arguments are not integral" ) );
     }
 
     throw std::runtime_error( "Unsupported operator" );
     return 0;
   }
 
-  int evaluate( const SyntaxTree::Node* node )
+  Value evaluate( const SyntaxTree::Node* node )
   {
-    if ( auto num = std::get_if< int >( &node->value ) )
-    {
-      return *num;
-    }
-
+    // Atom.
     if ( node->children.empty() )
     {
-      return 0;
+      return node->value;
     }
 
     // nested superfluous expressions. e.g. ( (+ 1 2) )
@@ -302,7 +316,7 @@ namespace slisp
     const auto& op = std::get< std::string >( node->children[ 0 ]->value );
 
     // Evaluate first argument.
-    int result = evaluate( node->children[ 1 ].get() );
+    Value result = evaluate( node->children[ 1 ].get() );
 
     // Evaluate the rest of the arguments.
     for ( int i = 2; i < node->children.size(); ++i )

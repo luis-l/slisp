@@ -339,7 +339,7 @@ namespace slisp
       return s->children.front();
     }
 
-    if ( auto op = std::get_if< std::string >( &s->children[ 0 ]->value ) )
+    if ( auto op = std::get_if< std::string >( &s->children.front()->value ) )
     {
       return evalOp( *op, s->children.begin() + 1, s->children.end() );
     }

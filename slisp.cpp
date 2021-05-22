@@ -265,6 +265,11 @@ namespace slisp
     }
     if ( op == "/" )
     {
+      if ( y == 0 )
+      {
+        throw std::domain_error( "Division by zero." );
+      }
+
       return x / y;
     }
 
@@ -318,7 +323,7 @@ namespace slisp
       bool isDone = false;
       while ( !isDone )
       {
-        out << "> ";
+        out << ">> ";
         std::string input;
         std::getline( in, input );
 
@@ -333,7 +338,7 @@ namespace slisp
           {
             SyntaxTree t = parse( input.cbegin(), input.cend() );
             //out << t << '\n';
-            out << ">> " << evaluate( t.root.get() ) << '\n';
+            out << evaluate( t.root.get() ) << '\n';
           }
           catch ( const std::exception& e )
           {

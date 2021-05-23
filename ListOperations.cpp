@@ -3,70 +3,49 @@
 
 #include "SValue.h"
 
+// v is an S-expression. e.g. (op qexpr)
 std::unique_ptr< SValue >& head( std::unique_ptr< SValue >& v )
 {
-  if ( std::get_if< QExpr >( &v->value ) )
-  {
-    if ( v->children.empty() )
-    {
-      v->value = Error( "Nothing passed to head" );
-    }
-    else
-    {
-      // Take the front only.
-      v->children.erase( v->children.begin() + 1, v->children.end() );
-    }
-  }
+  REQUIRE( v, !v->isEmpty(), "Nothing passed to head" );
+  REQUIRE( v, v->argumentCount() == 1, "head only takes 1 argument" );
 
-  else
-  {
-    v->value = Error( "head must take a Q-expression" );
-  }
+  std::unique_ptr< SValue >& qexpr = v->arguments().front();
 
-  return v;
+  REQUIRE( v, qexpr->isType< QExpr >(), "head must take a Q-expression" );
+  REQUIRE( v, !qexpr->isEmpty(), "head requires a non-empty Q-expression" );
+
+  // Take the front only for the Q-expression children.
+  qexpr->children.erase( qexpr->children.begin() + 1, qexpr->children.end() );
+  return reduce( v, qexpr );
 }
 
 std::unique_ptr< SValue >& tail( std::unique_ptr< SValue >& v )
 {
-  if ( std::get_if< QExpr >( &v->value ) )
-  {
-    if ( v->children.empty() )
-    {
-      v->value = Error( "Nothing passed to tail" );
-    }
-    else
-    {
-      // Remain the front.
-      v->children.erase( v->children.begin() );
-    }
-  }
+  REQUIRE( v, !v->isEmpty(), "Nothing passed to tail" );
+  REQUIRE( v, v->argumentCount() == 1, "tail only takes 1 argument" );
 
-  else
-  {
-    v->value = Error( "tail must take a Q-expression" );
-  }
+  std::unique_ptr< SValue >& qexpr = v->arguments().front();
 
-  return v;
+  REQUIRE( v, qexpr->isType< QExpr >(), "tail must take a Q-expression" );
+  REQUIRE( v, !qexpr->isEmpty(), "tail requires a non-empty Q-expression" );
+
+  // Remove the front.
+  qexpr->children.erase( qexpr->children.begin() );
+  return reduce( v, qexpr );
 }
 
 std::unique_ptr< SValue >& list( std::unique_ptr< SValue >& v )
 {
   v->value = QExpr();
-  v->children.erase( v->children.begin() ); // erase operation of S expression ("list"), only keep arguments
+  v->children.erase( v->children.begin() ); // Drop the operation "list". Keep args.
   return v;
 }
 
 std::unique_ptr< SValue >& eval( std::unique_ptr< SValue >& v )
 {
-  if ( std::get_if< QExpr >( &v->value ) )
-  {
-    v->value = Sexpr();
-  }
-  else
-  {
-    v->value = Error( "eval must take a Q-expression" );
-  }
-
+  REQUIRE( v, v->isType< QExpr >(), "eval must take a Q-expression" );
+  v->value = Sexpr();
+  v->children.erase( v->children.begin() ); // Drop the operation "eval". Keep args.
   return v;
 }
 
@@ -77,34 +56,23 @@ std::unique_ptr< SValue >& eval( std::unique_ptr< SValue >& v )
 //   qexpr
 std::unique_ptr< SValue >& join( std::unique_ptr< SValue >& v )
 {
-  // Must contain operator and at least 1 argument.
-  if ( v->children.size() < 2 )
-  {
-    v->value = Error( "join needs at least 2 arguments" );
-    return v;
-  }
+  REQUIRE( v, v->argumentCount() > 0, "join needs at least 1 argument" );
 
-  const bool allQexprs = std::all_of( v->children.cbegin() + 1, v->children.cend(), []( const auto& child ) {
-    return std::get_if< QExpr >( &child->value ) != nullptr;
+  auto args = v->arguments();
+
+  const bool allQexprs =
+    std::all_of( args.begin(), args.end(), []( const auto& child ) { return child->isType< QExpr >(); } );
+
+  REQUIRE( v, allQexprs, "join must take Q-expressions" );
+
+  auto& concat = args.front();
+
+  std::for_each( args.begin() + 1, args.end(), [ &concat ]( auto& child ) {
+    concat->children.insert(
+      concat->children.end(),
+      std::make_move_iterator( child->children.begin() ),
+      std::make_move_iterator( child->children.end() ) );
   } );
 
-  if ( !allQexprs )
-  {
-    v->value = Error( "join must take Q-expressions" );
-  }
-  else
-  {
-    auto& concat = *( v->children.begin() + 1 );
-
-    std::for_each( v->children.begin() + 2, v->children.end(), [ &concat ]( auto& qexprChild ) {
-      concat->children.insert(
-        concat->children.end(),
-        std::make_move_iterator( qexprChild->children.begin() ),
-        std::make_move_iterator( qexprChild->children.end() ) );
-    } );
-
-    v = std::move( concat );
-  }
-
-  return v;
+  return reduce( v, concat );
 }

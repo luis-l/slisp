@@ -6,139 +6,129 @@
 #include <functional>
 #include <numeric>
 
-std::unique_ptr< SValue >& evaluateSexpr( std::unique_ptr< SValue >& s );
-std::unique_ptr< SValue >& evaluateOperation( const std::string& op, std::unique_ptr< SValue >& v );
-std::unique_ptr< SValue >& evaluateNumeric( const std::string& op, SValueIt begin, SValueIt end );
+SValueRef evaluateSexpr( Environment& e, SValueRef s );
+SValueRef evaluateNumeric( const std::string& op, SValueRef v );
 
-std::unique_ptr< SValue >& evaluate( std::unique_ptr< SValue >& s )
+void addCoreFunctions( Environment& e )
+{
+  e[ "+" ] =
+    std::make_unique< SValue >( []( Environment&, SValueRef v ) -> SValueRef { return evaluateNumeric( "+", v ); } );
+
+  e[ "-" ] =
+    std::make_unique< SValue >( []( Environment&, SValueRef v ) -> SValueRef { return evaluateNumeric( "-", v ); } );
+
+  e[ "*" ] =
+    std::make_unique< SValue >( []( Environment&, SValueRef v ) -> SValueRef { return evaluateNumeric( "*", v ); } );
+
+  e[ "/" ] =
+    std::make_unique< SValue >( []( Environment&, SValueRef v ) -> SValueRef { return evaluateNumeric( "/", v ); } );
+
+  e[ "head" ] = std::make_unique< SValue >( []( Environment&, SValueRef v ) -> SValueRef { return head( v ); } );
+  e[ "tail" ] = std::make_unique< SValue >( []( Environment&, SValueRef v ) -> SValueRef { return tail( v ); } );
+  e[ "list" ] = std::make_unique< SValue >( []( Environment&, SValueRef v ) -> SValueRef { return list( v ); } );
+  e[ "eval" ] = std::make_unique< SValue >( []( Environment&, SValueRef v ) -> SValueRef { return eval( v ); } );
+  e[ "join" ] = std::make_unique< SValue >( []( Environment&, SValueRef v ) -> SValueRef { return join( v ); } );
+}
+
+SValueRef evaluate( Environment& e, SValueRef s )
 {
   if ( std::get_if< Sexpr >( &s->value ) )
   {
-    return evaluateSexpr( s );
+    return evaluateSexpr( e, s );
   }
 
   return s;
 }
 
-std::unique_ptr< SValue >& evaluateSexpr( std::unique_ptr< SValue >& s )
+SValueRef evaluateSexpr( Environment& e, SValueRef s )
 {
   for ( auto& child : s->children )
   {
-    child = std::move( evaluate( child ) );
+    reduce( child, evaluate( e, child ) );
   }
 
   // Atom.
-  if ( s->children.empty() )
+  if ( s->isEmpty() )
   {
     return s;
   }
 
-  // nested superfluous expressions. e.g. ( (+ 1 2) )
-  if ( s->children.size() == 1 )
+  // nested superfluous expressions. e.g. ( ( ) )
+  if ( s->size() == 1 )
   {
-    s = std::move( s->children.front() );
-    return s;
+    return reduce( s, s->children.front() );
   }
 
-  if ( auto op = std::get_if< std::string >( &s->children.front()->value ) )
+  if ( auto op = std::get_if< std::string >( &s->operation().value ) )
   {
-    return evaluateOperation( *op, s );
+    auto it = e.find( *op );
+    REQUIRE( s, it != e.end(), *op + " not found" );
+    SValueRef func = it->second;
+    if ( auto callable = std::get_if< CoreFunction >( &func->value ) )
+    {
+      return ( *callable )( e, s );
+    }
+    else
+    {
+      return error( "Operation is not callable", s );
+    }
   }
   else
   {
-    s->value = Error( "Unsupported operator" );
-    return s;
+    return error( "Unsupported operator symbol. Must be a string", s );
   }
 }
 
-std::unique_ptr< SValue >& evaluateOperation( const std::string& op, std::unique_ptr< SValue >& v )
+// v is an S-expression. e.g. + 1 2 3 5
+std::unique_ptr< SValue >& evaluateNumeric( const std::string& op, SValueRef v )
 {
-  auto firstArgIt = v->children.begin() + 1;
+  auto args = v->arguments();
 
-  if ( op == "head" )
-  {
-    // Children must only contain op and qexpr
-    v = std::move( head( *firstArgIt ) );
-  }
-  else if ( op == "tail" )
-  {
-    // Children must only contain op and qexpr
-    v = std::move( tail( *firstArgIt ) );
-  }
-  else if ( op == "list" )
-  {
-    v = std::move( list( v ) );
-  }
-  else if ( op == "eval" )
-  {
-    // Children must only contain op and qexpr. e.g. eval {1 2}
-    v = std::move( evaluate( eval( *firstArgIt ) ) );
-  }
-  else if ( op == "join" )
-  {
-    v = std::move( join( v ) );
-  }
-  else
-  {
-    // Children must only contain op and one or more numeric arguments
-    v = std::move( evaluateNumeric( op, firstArgIt, v->children.end() ) );
-  }
+  const bool allIntegral =
+    std::all_of( args.begin(), args.end(), []( const SValueRef s ) { return s->isType< int >(); } );
 
-  return v;
-}
-
-std::unique_ptr< SValue >& evaluateNumeric( const std::string& op, SValueIt begin, SValueIt end )
-{
-  const bool allIntegral = std::all_of(
-    begin, end, []( const std::unique_ptr< SValue >& s ) { return std::get_if< int >( &s->value ) != nullptr; } );
-
-  if ( !allIntegral )
-  {
-    ( *begin )->value = Error( "Not all arguments are integral" );
-    return ( *begin );
-  }
+  REQUIRE( v, allIntegral, "Not all arguments are integral" );
 
   // Negation
-  if ( op == "-" && ( end - begin == 1 ) )
+  if ( op == "-" && v->argumentCount() == 1 )
   {
-    ( *begin )->value = -std::get< int >( ( *begin )->value );
-    return ( *begin );
+    auto& arg = args.front();
+    arg->apply< int >( std::negate< int >() );
+    return reduce( v, arg );
   }
 
-  auto integralOperator = [ &op ]() -> std::function< Value( const Value&, const std::unique_ptr< SValue >& ) > {
+  using AccumulatorFunc = std::function< SValueRef( SValueRef, SValueRef ) >;
+
+  auto integralOperator = [ &op ]() -> AccumulatorFunc {
     if ( op == "+" )
     {
-      return []( const Value& x, const std::unique_ptr< SValue >& y ) {
-        return Value( std::get< int >( x ) + std::get< int >( y->value ) );
-      };
+      return []( SValueRef x, SValueRef y ) -> SValueRef { return concat< int >( x, y, std::plus< int >() ); };
     }
     if ( op == "-" )
     {
-      return []( const Value& x, const std::unique_ptr< SValue >& y ) {
-        return Value( std::get< int >( x ) - std::get< int >( y->value ) );
-      };
+      return []( SValueRef x, SValueRef y ) -> SValueRef { return concat< int >( x, y, std::minus< int >() ); };
     }
     if ( op == "*" )
     {
-      return []( const Value& x, const std::unique_ptr< SValue >& y ) {
-        return Value( std::get< int >( x ) * std::get< int >( y->value ) );
-      };
+      return []( SValueRef x, SValueRef y ) -> SValueRef { return concat< int >( x, y, std::multiplies< int >() ); };
     }
     if ( op == "/" )
     {
-      return []( const Value& x, const std::unique_ptr< SValue >& y ) {
-        if ( std::get_if< Error >( &x ) )
+      return []( SValueRef x, SValueRef y ) -> SValueRef {
+        if ( x->isType< Error >() )
         {
           return x; // Propagate error.
         }
-        int yint = std::get< int >( y->value );
-        return yint == 0 ? Value( Error( "Division by zero" ) ) : Value( std::get< int >( x ) / yint );
+
+        int yvalue = std::get< int >( y->value );
+        REQUIRE( x, yvalue != 0, "Division by zero" );
+        return concat< int >( x, y, std::divides< int >() );
       };
     }
 
-    return []( const Value& x, const std::unique_ptr< SValue >& y ) { return Value( Error( "Unknown operator" ) ); };
+    return []( SValueRef x, SValueRef ) -> SValueRef { return error( "Unsupported numerical operator", x ); };
   };
 
-  ( *begin )->value = std::accumulate( begin + 1, end, ( *begin )->value, integralOperator() );
-  return *begin;
+  return reduce(
+    v, std::accumulate( args.begin() + 1, args.end(), std::reference_wrapper( args.front() ), integralOperator() ) );
 }

@@ -11,6 +11,9 @@ class InteractiveEvaluator
 public:
   void runInteractiveMode()
   {
+    Environment globalEnv;
+    addCoreFunctions( globalEnv );
+
     out << std::boolalpha;
 
     bool isDone = false;
@@ -33,7 +36,7 @@ public:
           out << "Evaluation Tree\n";
           out << *root << '\n';
 
-          auto& result = evaluate( root );
+          auto& result = evaluate( globalEnv, root );
           out << result->value << '\n';
 
           out << "Evaluation Tree\n";

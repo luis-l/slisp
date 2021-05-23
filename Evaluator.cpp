@@ -1,13 +1,18 @@
 
 #include "Evaluator.h"
+#include "ListOperations.h"
 #include "SValue.h"
 
 #include <functional>
 #include <numeric>
 
+std::unique_ptr< SValue >& evaluateSexpr( std::unique_ptr< SValue >& s );
+std::unique_ptr< SValue >& evaluateOperation( const std::string& op, std::unique_ptr< SValue >& v );
+std::unique_ptr< SValue >& evaluateNumeric( const std::string& op, SValueIt begin, SValueIt end );
+
 std::unique_ptr< SValue >& evaluate( std::unique_ptr< SValue >& s )
 {
-  if ( std::get_if< ExpressionType >( &s->value ) )
+  if ( std::get_if< Sexpr >( &s->value ) )
   {
     return evaluateSexpr( s );
   }
@@ -19,8 +24,7 @@ std::unique_ptr< SValue >& evaluateSexpr( std::unique_ptr< SValue >& s )
 {
   for ( auto& child : s->children )
   {
-    child->value = evaluate( child )->value;
-    child->children.clear(); // Done with this - memory can be freed.
+    child = std::move( evaluate( child ) );
   }
 
   // Atom.
@@ -32,14 +36,13 @@ std::unique_ptr< SValue >& evaluateSexpr( std::unique_ptr< SValue >& s )
   // nested superfluous expressions. e.g. ( (+ 1 2) )
   if ( s->children.size() == 1 )
   {
-    return s->children.front();
+    s = std::move( s->children.front() );
+    return s;
   }
 
   if ( auto op = std::get_if< std::string >( &s->children.front()->value ) )
   {
-    s->value = evalOp( *op, s->children.begin() + 1, s->children.end() )->value;
-    s->children.clear();
-    return s;
+    return evaluateOperation( *op, s );
   }
   else
   {
@@ -48,7 +51,43 @@ std::unique_ptr< SValue >& evaluateSexpr( std::unique_ptr< SValue >& s )
   }
 }
 
-std::unique_ptr< SValue >& evalOp( const std::string& op, SValueIt begin, SValueIt end )
+std::unique_ptr< SValue >& evaluateOperation( const std::string& op, std::unique_ptr< SValue >& v )
+{
+  auto firstArgIt = v->children.begin() + 1;
+
+  if ( op == "head" )
+  {
+    // Children must only contain op and qexpr
+    v = std::move( head( *firstArgIt ) );
+  }
+  else if ( op == "tail" )
+  {
+    // Children must only contain op and qexpr
+    v = std::move( tail( *firstArgIt ) );
+  }
+  else if ( op == "list" )
+  {
+    v = std::move( list( v ) );
+  }
+  else if ( op == "eval" )
+  {
+    // Children must only contain op and qexpr. e.g. eval {1 2}
+    v = std::move( evaluate( eval( *firstArgIt ) ) );
+  }
+  else if ( op == "join" )
+  {
+    v = std::move( join( v ) );
+  }
+  else
+  {
+    // Children must only contain op and one or more numeric arguments
+    v = std::move( evaluateNumeric( op, firstArgIt, v->children.end() ) );
+  }
+
+  return v;
+}
+
+std::unique_ptr< SValue >& evaluateNumeric( const std::string& op, SValueIt begin, SValueIt end )
 {
   const bool allIntegral = std::all_of(
     begin, end, []( const std::unique_ptr< SValue >& s ) { return std::get_if< int >( &s->value ) != nullptr; } );

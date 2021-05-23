@@ -82,28 +82,37 @@ std::unique_ptr< SValue > parse( IteratorT begin, IteratorT end )
   };
 
   auto isParen = []( unsigned char c ) { return c == '(' || c == ')'; };
+  auto isBraces = []( unsigned char c ) { return c == '{' || c == '}'; };
 
   auto it = begin;
 
   std::stack< std::unique_ptr< SValue > > traversal;
-  traversal.push( std::make_unique< SValue >( ExpressionType() ) ); // Represents program
+  traversal.push( std::make_unique< SValue >( Sexpr() ) ); // Represents program
 
   while ( it != end )
   {
-    it = std::find_if(
-      it, end, [ isValidSymbol, isParen ]( unsigned char c ) { return isParen( c ) || isValidSymbol( c ); } );
+    it = std::find_if( it, end, [ isValidSymbol, isParen, isBraces ]( unsigned char c ) {
+      return isParen( c ) || isBraces( c ) || isValidSymbol( c );
+    } );
 
     if ( it != end )
     {
       const unsigned char c = *it;
       if ( c == '(' )
       {
-        traversal.push( std::make_unique< SValue >( ExpressionType() ) );
+        traversal.push( std::make_unique< SValue >( Sexpr() ) );
+      }
+
+      else if ( c == '{' )
+      {
+        traversal.push( std::make_unique< SValue >( QExpr() ) );
       }
 
       else if ( isValidSymbol( c ) )
       {
-        auto contentEnd = std::find_if( it, end, isParen );
+        auto contentEnd =
+          std::find_if( it, end, [ isParen, isBraces ]( unsigned char c ) { return isParen( c ) || isBraces( c ); } );
+
         std::string line;
         std::copy( it, contentEnd, std::back_inserter( line ) );
         it = contentEnd;
@@ -121,6 +130,21 @@ std::unique_ptr< SValue > parse( IteratorT begin, IteratorT end )
         continue;
       }
 
+      else if ( c == '}' )
+      {
+        std::unique_ptr< SValue > top = std::move( traversal.top() );
+        traversal.pop();
+
+        if ( !traversal.empty() )
+        {
+          traversal.top()->children.push_back( std::move( top ) );
+        }
+        else if ( !std::get_if< QExpr >( &top->value ) )
+        {
+          throw std::runtime_error( "Mismatch qexpr closing brace" );
+        }
+      }
+
       else if ( c == ')' )
       {
         std::unique_ptr< SValue > top = std::move( traversal.top() );
@@ -130,9 +154,9 @@ std::unique_ptr< SValue > parse( IteratorT begin, IteratorT end )
         {
           traversal.top()->children.push_back( std::move( top ) );
         }
-        else
+        else if ( !std::get_if< Sexpr >( &top->value ) )
         {
-          throw std::runtime_error( "Extra closing paren" );
+          throw std::runtime_error( "Mismatched closing parens" );
         }
       }
 

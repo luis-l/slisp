@@ -5,7 +5,6 @@
 #include "SValue.h"
 
 #include <iostream>
-#include <memory>
 
 class InteractiveEvaluator
 {
@@ -32,13 +31,13 @@ public:
         {
           auto root = parse( input.cbegin(), input.cend() );
           out << "Evaluation Tree\n";
-          out << root << '\n';
+          out << *root << '\n';
 
           auto& result = evaluate( root );
           out << result->value << '\n';
 
           out << "Evaluation Tree\n";
-          out << root << '\n';
+          out << *root << '\n';
         }
         catch ( const std::exception& e )
         {
@@ -54,7 +53,7 @@ public:
 
 int main()
 {
-  std::cout << "*Shrek LISP v0.0\n";
+  std::cout << "*hxor's LISP v0.0\n";
 
   InteractiveEvaluator runner;
   runner.runInteractiveMode();

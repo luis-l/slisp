@@ -1,8 +1,6 @@
 #pragma once
 
-#include <memory>
-
-class SValue;
+#include "SValueRef.h"
 
 /// @brief Parses a string iterable.
 /// @tparam IteratorT Iterable type for strings. e.g. std::string::iterator
@@ -10,4 +8,4 @@ class SValue;
 /// @param end Where to end parsing.
 /// @return The S-expression for the parsed contents.
 template < typename IteratorT >
-std::shared_ptr< SValue > parse( IteratorT begin, IteratorT end );
+SValueRef parse( IteratorT begin, IteratorT end );

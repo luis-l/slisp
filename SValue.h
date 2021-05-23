@@ -1,16 +1,16 @@
 #pragma once
 
+#include "Environment.h"
+#include "SValueRef.h"
+
 #include <functional>
 #include <memory>
 #include <queue>
 #include <span>
 #include <stack>
 #include <string>
-#include <unordered_map>
 #include <variant>
 #include <vector>
-
-class SValue;
 
 struct Sexpr
 {};
@@ -23,15 +23,10 @@ struct Error
   std::string message;
 };
 
-using SValueRef = std::shared_ptr< SValue >;
-
-using Environment = std::unordered_map< std::string, SValueRef >;
-
 using CoreFunction = std::function< SValueRef( Environment&, SValueRef ) >;
 
 using Value = std::variant< Sexpr, QExpr, CoreFunction, std::string, int, Error >;
 
-class SValue;
 using Cells = std::vector< SValueRef >;
 
 class SValue
@@ -135,8 +130,6 @@ SValueRef error( const std::string& message, SValueRef v );
 /// As shown, the inner S-expressions are evaluated and reduced to smaller S-expressions.
 /// @code ( + (* 10 10 ) ( - 5 2 ) ) -> ( + 100 3 ) -> 103
 SValueRef reduce( SValueRef& parent, SValueRef child );
-
-SValueRef getSymbol( const std::string& sym, Environment& e, SValueRef v );
 
 std::unordered_map< const SValue*, std::size_t > getDepths( const SValue& r );
 

@@ -17,13 +17,6 @@ SValueRef reduce( SValueRef& parent, SValueRef child )
   return parent;
 }
 
-SValueRef getSymbol( const std::string& sym, Environment& e, SValueRef v )
-{
-  auto it = e.find( sym );
-  REQUIRE( v, it != e.end(), sym + " not found" );
-  return it->second;
-}
-
 std::unordered_map< const SValue*, std::size_t > getDepths( const SValue& r )
 {
   std::unordered_map< const SValue*, std::size_t > depths;

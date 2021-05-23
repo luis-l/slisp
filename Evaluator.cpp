@@ -12,27 +12,33 @@ SValueRef evaluateNumeric( const std::string& op, SValueRef v );
 void addCoreFunctions( Environment& e )
 {
   e[ "+" ] =
-    std::make_unique< SValue >( []( Environment&, SValueRef v ) -> SValueRef { return evaluateNumeric( "+", v ); } );
+    std::make_shared< SValue >( []( Environment&, SValueRef v ) -> SValueRef { return evaluateNumeric( "+", v ); } );
 
   e[ "-" ] =
-    std::make_unique< SValue >( []( Environment&, SValueRef v ) -> SValueRef { return evaluateNumeric( "-", v ); } );
+    std::make_shared< SValue >( []( Environment&, SValueRef v ) -> SValueRef { return evaluateNumeric( "-", v ); } );
 
   e[ "*" ] =
-    std::make_unique< SValue >( []( Environment&, SValueRef v ) -> SValueRef { return evaluateNumeric( "*", v ); } );
+    std::make_shared< SValue >( []( Environment&, SValueRef v ) -> SValueRef { return evaluateNumeric( "*", v ); } );
 
   e[ "/" ] =
-    std::make_unique< SValue >( []( Environment&, SValueRef v ) -> SValueRef { return evaluateNumeric( "/", v ); } );
+    std::make_shared< SValue >( []( Environment&, SValueRef v ) -> SValueRef { return evaluateNumeric( "/", v ); } );
 
-  e[ "head" ] = std::make_unique< SValue >( []( Environment&, SValueRef v ) -> SValueRef { return head( v ); } );
-  e[ "tail" ] = std::make_unique< SValue >( []( Environment&, SValueRef v ) -> SValueRef { return tail( v ); } );
-  e[ "list" ] = std::make_unique< SValue >( []( Environment&, SValueRef v ) -> SValueRef { return list( v ); } );
-  e[ "eval" ] = std::make_unique< SValue >( []( Environment&, SValueRef v ) -> SValueRef { return eval( v ); } );
-  e[ "join" ] = std::make_unique< SValue >( []( Environment&, SValueRef v ) -> SValueRef { return join( v ); } );
+  e[ "head" ] = std::make_shared< SValue >( []( Environment&, SValueRef v ) -> SValueRef { return head( v ); } );
+  e[ "tail" ] = std::make_shared< SValue >( []( Environment&, SValueRef v ) -> SValueRef { return tail( v ); } );
+  e[ "list" ] = std::make_shared< SValue >( []( Environment&, SValueRef v ) -> SValueRef { return list( v ); } );
+  e[ "eval" ] = std::make_shared< SValue >( []( Environment&, SValueRef v ) -> SValueRef { return eval( v ); } );
+  e[ "join" ] = std::make_shared< SValue >( []( Environment&, SValueRef v ) -> SValueRef { return join( v ); } );
 }
 
 SValueRef evaluate( Environment& e, SValueRef s )
 {
-  if ( std::get_if< Sexpr >( &s->value ) )
+  // Symbol
+  if ( auto symLabel = std::get_if< std::string >( &s->value ) )
+  {
+    return reduce( s, getSymbol( *symLabel, e, s ) );
+  }
+
+  if ( s->isType< Sexpr >() )
   {
     return evaluateSexpr( e, s );
   }
@@ -59,28 +65,18 @@ SValueRef evaluateSexpr( Environment& e, SValueRef s )
     return reduce( s, s->children.front() );
   }
 
-  if ( auto op = std::get_if< std::string >( &s->operation().value ) )
+  if ( auto callable = std::get_if< CoreFunction >( &s->operation().value ) )
   {
-    auto it = e.find( *op );
-    REQUIRE( s, it != e.end(), *op + " not found" );
-    SValueRef func = it->second;
-    if ( auto callable = std::get_if< CoreFunction >( &func->value ) )
-    {
-      return ( *callable )( e, s );
-    }
-    else
-    {
-      return error( "Operation is not callable", s );
-    }
+    return ( *callable )( e, s );
   }
   else
   {
-    return error( "Unsupported operator symbol. Must be a string", s );
+    return error( "Operation is not callable", s );
   }
 }
 
 // v is an S-expression. e.g. + 1 2 3 5
-std::unique_ptr< SValue >& evaluateNumeric( const std::string& op, SValueRef v )
+SValueRef evaluateNumeric( const std::string& op, SValueRef v )
 {
   auto args = v->arguments();
 
@@ -129,6 +125,5 @@ std::unique_ptr< SValue >& evaluateNumeric( const std::string& op, SValueRef v )
     return []( SValueRef x, SValueRef ) -> SValueRef { return error( "Unsupported numerical operator", x ); };
   };
 
-  return reduce(
-    v, std::accumulate( args.begin() + 1, args.end(), std::reference_wrapper( args.front() ), integralOperator() ) );
+  return reduce( v, std::accumulate( args.begin() + 1, args.end(), args.front(), integralOperator() ) );
 }

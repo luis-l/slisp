@@ -23,14 +23,16 @@ struct Error
   std::string message;
 };
 
-using Environment = std::unordered_map< std::string, std::unique_ptr< SValue > >;
+using SValueRef = std::shared_ptr< SValue >;
 
-using CoreFunction = std::function< std::unique_ptr< SValue >&( Environment&, std::unique_ptr< SValue >& ) >;
+using Environment = std::unordered_map< std::string, SValueRef >;
+
+using CoreFunction = std::function< SValueRef( Environment&, SValueRef ) >;
 
 using Value = std::variant< Sexpr, QExpr, CoreFunction, std::string, int, Error >;
 
 class SValue;
-using Cells = std::vector< std::unique_ptr< SValue > >;
+using Cells = std::vector< SValueRef >;
 
 class SValue
 {
@@ -51,7 +53,9 @@ public:
   /// @brief Get the operation for S-expression.
   const SValue& operation() const;
 
-  std::span< std::unique_ptr< SValue > > arguments();
+  std::span< SValueRef > arguments();
+
+  bool isError() const;
 
   template < typename T >
   bool isType() const
@@ -66,8 +70,6 @@ public:
     value = f( std::get< T >( value ) );
   }
 };
-
-using SValueRef = std::unique_ptr< SValue >&;
 
 template < typename T, typename ConcatF >
 SValueRef concat( SValueRef left, SValueRef right, ConcatF concatFunc )
@@ -132,7 +134,9 @@ SValueRef error( const std::string& message, SValueRef v );
 /// @brief The parent becomes the child. This is used to evaluate and reduce S-expressions.
 /// As shown, the inner S-expressions are evaluated and reduced to smaller S-expressions.
 /// @code ( + (* 10 10 ) ( - 5 2 ) ) -> ( + 100 3 ) -> 103
-SValueRef reduce( SValueRef parent, SValueRef child );
+SValueRef reduce( SValueRef& parent, SValueRef child );
+
+SValueRef getSymbol( const std::string& sym, Environment& e, SValueRef v );
 
 std::unordered_map< const SValue*, std::size_t > getDepths( const SValue& r );
 

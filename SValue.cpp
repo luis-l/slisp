@@ -11,10 +11,17 @@ SValueRef error( const std::string& message, SValueRef v )
   return v;
 }
 
-SValueRef reduce( SValueRef parent, SValueRef child )
+SValueRef reduce( SValueRef& parent, SValueRef child )
 {
   parent = std::move( child );
   return parent;
+}
+
+SValueRef getSymbol( const std::string& sym, Environment& e, SValueRef v )
+{
+  auto it = e.find( sym );
+  REQUIRE( v, it != e.end(), sym + " not found" );
+  return it->second;
 }
 
 std::unordered_map< const SValue*, std::size_t > getDepths( const SValue& r )
@@ -79,7 +86,12 @@ const SValue& SValue::operation() const
   return *children.front();
 }
 
-std::span< std::unique_ptr< SValue > > SValue::arguments()
+std::span< SValueRef > SValue::arguments()
 {
   return isEmpty() ? std::span{ children.begin(), 0 } : std::span{ children.begin() + 1, children.end() };
+}
+
+bool SValue::isError() const
+{
+  return isType< Error >();
 }

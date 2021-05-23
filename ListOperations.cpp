@@ -4,12 +4,12 @@
 #include "SValue.h"
 
 // v is an S-expression. e.g. (op qexpr)
-std::unique_ptr< SValue >& head( std::unique_ptr< SValue >& v )
+SValueRef head( SValueRef v )
 {
   REQUIRE( v, !v->isEmpty(), "Nothing passed to head" );
   REQUIRE( v, v->argumentCount() == 1, "head only takes 1 argument" );
 
-  std::unique_ptr< SValue >& qexpr = v->arguments().front();
+  SValueRef qexpr = v->arguments().front();
 
   REQUIRE( v, qexpr->isType< QExpr >(), "head must take a Q-expression" );
   REQUIRE( v, !qexpr->isEmpty(), "head requires a non-empty Q-expression" );
@@ -19,12 +19,12 @@ std::unique_ptr< SValue >& head( std::unique_ptr< SValue >& v )
   return reduce( v, qexpr );
 }
 
-std::unique_ptr< SValue >& tail( std::unique_ptr< SValue >& v )
+SValueRef tail( SValueRef v )
 {
   REQUIRE( v, !v->isEmpty(), "Nothing passed to tail" );
   REQUIRE( v, v->argumentCount() == 1, "tail only takes 1 argument" );
 
-  std::unique_ptr< SValue >& qexpr = v->arguments().front();
+  SValueRef qexpr = v->arguments().front();
 
   REQUIRE( v, qexpr->isType< QExpr >(), "tail must take a Q-expression" );
   REQUIRE( v, !qexpr->isEmpty(), "tail requires a non-empty Q-expression" );
@@ -34,14 +34,14 @@ std::unique_ptr< SValue >& tail( std::unique_ptr< SValue >& v )
   return reduce( v, qexpr );
 }
 
-std::unique_ptr< SValue >& list( std::unique_ptr< SValue >& v )
+SValueRef list( SValueRef v )
 {
   v->value = QExpr();
   v->children.erase( v->children.begin() ); // Drop the operation "list". Keep args.
   return v;
 }
 
-std::unique_ptr< SValue >& eval( std::unique_ptr< SValue >& v )
+SValueRef eval( SValueRef v )
 {
   REQUIRE( v, v->isType< QExpr >(), "eval must take a Q-expression" );
   v->value = Sexpr();
@@ -54,7 +54,7 @@ std::unique_ptr< SValue >& eval( std::unique_ptr< SValue >& v )
 //   join
 //   qexpr
 //   qexpr
-std::unique_ptr< SValue >& join( std::unique_ptr< SValue >& v )
+SValueRef join( SValueRef v )
 {
   REQUIRE( v, v->argumentCount() > 0, "join needs at least 1 argument" );
 

@@ -73,7 +73,7 @@ std::vector< std::string > lineSplitter( const std::string& line )
 }
 
 template < typename IteratorT >
-std::unique_ptr< SValue > parse( IteratorT begin, IteratorT end )
+SValueRef parse( IteratorT begin, IteratorT end )
 {
   const std::string validSymbolics = "_+-*\\/=<>!&";
 
@@ -86,8 +86,8 @@ std::unique_ptr< SValue > parse( IteratorT begin, IteratorT end )
 
   auto it = begin;
 
-  std::stack< std::unique_ptr< SValue > > traversal;
-  traversal.push( std::make_unique< SValue >( Sexpr() ) ); // Represents program
+  std::stack< SValueRef > traversal;
+  traversal.push( std::make_shared< SValue >( Sexpr() ) ); // Represents program
 
   while ( it != end )
   {
@@ -100,12 +100,12 @@ std::unique_ptr< SValue > parse( IteratorT begin, IteratorT end )
       const unsigned char c = *it;
       if ( c == '(' )
       {
-        traversal.push( std::make_unique< SValue >( Sexpr() ) );
+        traversal.push( std::make_shared< SValue >( Sexpr() ) );
       }
 
       else if ( c == '{' )
       {
-        traversal.push( std::make_unique< SValue >( QExpr() ) );
+        traversal.push( std::make_shared< SValue >( QExpr() ) );
       }
 
       else if ( isValidSymbol( c ) )
@@ -123,8 +123,8 @@ std::unique_ptr< SValue > parse( IteratorT begin, IteratorT end )
 
         for ( const std::string& s : lineSplitter( line ) )
         {
-          auto child = std::make_unique< SValue >( readValue( s ) );
-          parent->children.push_back( std::move( child ) );
+          auto child = std::make_shared< SValue >( readValue( s ) );
+          parent->children.push_back( child );
         }
 
         continue;
@@ -132,12 +132,12 @@ std::unique_ptr< SValue > parse( IteratorT begin, IteratorT end )
 
       else if ( c == '}' )
       {
-        std::unique_ptr< SValue > top = std::move( traversal.top() );
+        std::shared_ptr< SValue > top = traversal.top();
         traversal.pop();
 
         if ( !traversal.empty() )
         {
-          traversal.top()->children.push_back( std::move( top ) );
+          traversal.top()->children.push_back( top );
         }
         else if ( !std::get_if< QExpr >( &top->value ) )
         {
@@ -147,12 +147,12 @@ std::unique_ptr< SValue > parse( IteratorT begin, IteratorT end )
 
       else if ( c == ')' )
       {
-        std::unique_ptr< SValue > top = std::move( traversal.top() );
+        std::shared_ptr< SValue > top = traversal.top();
         traversal.pop();
 
         if ( !traversal.empty() )
         {
-          traversal.top()->children.push_back( std::move( top ) );
+          traversal.top()->children.push_back( top );
         }
         else if ( !std::get_if< Sexpr >( &top->value ) )
         {
@@ -169,13 +169,13 @@ std::unique_ptr< SValue > parse( IteratorT begin, IteratorT end )
     throw std::runtime_error( "Mismatched parens" );
   }
 
-  auto r = std::move( traversal.top() );
+  auto r = traversal.top();
   traversal.pop();
   return r;
 }
 
 using stringIt = std::string::iterator;
-template std::unique_ptr< SValue > parse< stringIt >( stringIt, stringIt );
+template std::shared_ptr< SValue > parse< stringIt >( stringIt, stringIt );
 
 using stringConstIt = std::string::const_iterator;
-template std::unique_ptr< SValue > parse< stringConstIt >( stringConstIt, stringConstIt );
+template std::shared_ptr< SValue > parse< stringConstIt >( stringConstIt, stringConstIt );

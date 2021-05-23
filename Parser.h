@@ -10,4 +10,4 @@ class SValue;
 /// @param end Where to end parsing.
 /// @return The S-expression for the parsed contents.
 template < typename IteratorT >
-std::unique_ptr< SValue > parse( IteratorT begin, IteratorT end );
+std::shared_ptr< SValue > parse( IteratorT begin, IteratorT end );

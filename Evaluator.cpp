@@ -11,6 +11,8 @@
 SValueRef evaluateSexpr( Environment& e, SValueRef s );
 SValueRef evaluateNumeric( const std::string& op, SValueRef v );
 SValueRef evaluateDef( Environment& e, SValueRef v );
+SValueRef evaluateLambda( Environment& e, SValueRef v );
+SValueRef invokeLambda( Lambda&, Environment& e, SValueRef v );
 
 const Symbol plusSymbol( "+" );
 const Symbol minusSymbol( "-" );
@@ -24,6 +26,7 @@ const Symbol joinSymbol( "join" );
 const Symbol evalSymbol( "eval" );
 
 const Symbol defSymbol( "def" );
+const Symbol lambdaSymbol( "\\" );
 
 void addCoreFunctions( Environment& e )
 {
@@ -48,6 +51,7 @@ void addCoreFunctions( Environment& e )
          } ) );
 
   e.set( defSymbol, std::make_shared< SValue >( evaluateDef ) );
+  e.set( lambdaSymbol, std::make_shared< SValue >( evaluateLambda ) );
 }
 
 SValueRef evaluate( Environment& e, SValueRef s )
@@ -89,10 +93,75 @@ SValueRef evaluateSexpr( Environment& e, SValueRef s )
   {
     return ( *callable )( e, s );
   }
+  else if ( auto l = std::get_if< Lambda >( &s->operation().value ) )
+  {
+    return invokeLambda( *l, e, s );
+  }
   else
   {
     return error( "Operation is not callable", s );
   }
+}
+
+SValueRef invokeLambda( Lambda& l, Environment& e, SValueRef s )
+{
+  l.env.parent = &e;
+
+  std::span< SValueRef > sArgs = s->arguments();
+  Cells& formalCells = l.formals->children;
+
+  const std::size_t argCount = sArgs.size();
+  const std::size_t formalCount = formalCells.size();
+
+  REQUIRE( s, argCount <= formalCount, "Too many arguments passed to lambda" );
+
+  // Bind all input arguments to respective formal expression.
+  for ( std::size_t i = 0; i < argCount; ++i )
+  {
+    const Symbol& sym = std::get< Symbol >( formalCells[ i ]->value );
+    l.env.set( sym, sArgs[ i ] );
+  }
+
+  // Remove binded formals.
+  formalCells.erase( formalCells.begin(), formalCells.begin() + argCount );
+
+  // Do full function application
+  if ( argCount == formalCount )
+  {
+    SValueRef wrappedBody = std::make_shared< SValue >( Sexpr() );
+    SValueRef bodyCopy = std::make_shared< SValue >( *l.body );
+    wrappedBody->children.push_back( std::make_shared< SValue >( Symbol( "eval" ) ) );
+    wrappedBody->children.push_back( bodyCopy ); // Add a copy
+    return evaluate( l.env, eval( wrappedBody ) );
+  }
+
+  else
+  {
+    // Partial application, return new lambda
+    // argCount < formalCount
+    return std::make_shared< SValue >( l );
+  }
+}
+
+SValueRef evaluateLambda( Environment& e, SValueRef v )
+{
+  REQUIRE( v, !v->isEmpty(), "Nothing passed to lambda" );
+  REQUIRE( v, v->argumentCount() == 2, "lambda requires 2 arguments" );
+
+  std::span< SValueRef > args = v->arguments();
+  SValueRef formals = args.front();
+  SValueRef body = args[ 1 ];
+  REQUIRE( v, formals->isType< QExpr >(), "First lambda argument must be Q-expression" );
+  REQUIRE( v, body->isType< QExpr >(), "Second lambda argument must be Q-expression" );
+
+  const bool allFormalsAreSymbols = std::all_of(
+    formals->children.cbegin(), formals->children.cend(), []( const auto& c ) { return c->isType< Symbol >(); } );
+
+  REQUIRE( v, allFormalsAreSymbols, "Lambda formals can only contains Symbols" );
+
+  v->value = Lambda( Environment(), formals, body );
+  v->children.clear();
+  return v;
 }
 
 SValueRef evaluateDef( Environment& e, SValueRef v )

@@ -47,11 +47,14 @@ SValueRef list( SValueRef v )
 
 SValueRef eval( SValueRef v )
 {
-  SValueRef arg = v->arguments().front();
+  REQUIRE( v, v->argumentCount() == 1, "eval must take 1 argument" );
+
+  std::span< SValueRef > args = v->arguments();
+  SValueRef arg = args.front();
 
   REQUIRE( v, arg->isType< QExpr >(), "eval must take a Q-expression" );
   v->value = Sexpr();
-  v->children = std::move( v->arguments().front()->children ); // Take Q-expression children as S-expression children.
+  v->children = std::move( arg->children ); // Take Q-expression children as S-expression children.
   return v;
 }
 

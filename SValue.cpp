@@ -5,6 +5,12 @@
 #include <assert.h>
 #include <ostream>
 
+// Does a deep copy of the Lambda.
+Lambda copy( const Lambda& l )
+{
+  return { l.env, std::make_shared< SValue >( *l.formals ), std::make_shared< SValue >( *l.body ) };
+}
+
 SValueRef error( const std::string& message, SValueRef v )
 {
   v->value = Error( message );
@@ -95,6 +101,14 @@ std::ostream& operator<<( std::ostream& o, const CoreFunction& f )
   return o << "<function>";
 }
 
+std::ostream& operator<<( std::ostream& o, const Lambda& f )
+{
+  o << "\\ ";
+  show( o, *f.formals ) << ' ';
+  show( o, *f.body );
+  return o;
+}
+
 std::size_t SValue::size() const
 {
   return children.size();
@@ -114,6 +128,11 @@ std::size_t SValue::argumentCount() const
 /// @brief Get the operation for S-expression.
 
 const SValue& SValue::operation() const
+{
+  return *children.front();
+}
+
+SValue& SValue::operation()
 {
   return *children.front();
 }

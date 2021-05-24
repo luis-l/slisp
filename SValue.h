@@ -22,9 +22,61 @@ struct Error
   std::string message;
 };
 
+// \  { x y }         {+ x y}
+//    formals qexpr   body qexpr
+struct Lambda
+{
+  //Lambda() = default;
+
+  Lambda( const Environment& e, SValueRef formals, SValueRef body ) : env( e ), formals( formals ), body( body )
+  {}
+
+  Lambda( const Lambda& other )
+  {
+    env = other.env;
+    formals = std::make_shared< SValue >( *other.formals );
+    body = std::make_shared< SValue >( *other.body );
+  }
+
+  Lambda& operator=( const Lambda& other )
+  {
+    if ( this != &other )
+    {
+      env = other.env;
+      formals = std::make_shared< SValue >( *other.formals );
+      body = std::make_shared< SValue >( *other.body );
+    }
+    return *this;
+  }
+
+  ~Lambda() = default;
+
+  //Lambda( Lambda&& other )
+  //{
+  //  env = std::move( other.env );
+  //  formals = std::move( other.formals );
+  //  body = std::move( other.body );
+  //}
+
+  //Lambda& operator=( Lambda&& other )
+  //{
+  //  if ( this != &other )
+  //  {
+  //    env = std::move( other.env );
+  //    formals = std::move( other.formals );
+  //    body = std::move( other.body );
+  //  }
+  //  return *this;
+  //}
+
+  Environment env;
+  SValueRef formals;
+  SValueRef body;
+};
+
 using CoreFunction = std::function< SValueRef( Environment&, SValueRef ) >;
 
-using Value = std::variant< Sexpr, QExpr, CoreFunction, Symbol, int, double, Error >;
+using Value = std::variant< Sexpr, QExpr, CoreFunction, Symbol, Lambda, int, double, Error >;
 
 using Cells = std::vector< SValueRef >;
 
@@ -34,6 +86,17 @@ public:
   SValue() = default;
   SValue( Value v ) : value( std::move( v ) )
   {}
+
+  SValue( const SValue& other )
+  {
+    value = other.value;
+
+    for ( const auto& c : other.children )
+    {
+      children.push_back( std::make_shared< SValue >( *c ) );
+    }
+  }
+
   Value value;
   Cells children;
 
@@ -46,6 +109,7 @@ public:
 
   /// @brief Get the operation for S-expression.
   const SValue& operation() const;
+  SValue& operation();
 
   std::span< SValueRef > arguments();
 
@@ -92,6 +156,7 @@ std::ostream& operator<<( std::ostream& o, const Sexpr& t );
 std::ostream& operator<<( std::ostream& o, const QExpr& t );
 std::ostream& operator<<( std::ostream& o, const Error& e );
 std::ostream& operator<<( std::ostream& o, const CoreFunction& f );
+std::ostream& operator<<( std::ostream& o, const Lambda& f );
 
 template < typename... Args >
 std::ostream& operator<<( std::ostream& o, const std::variant< Args... >& value )

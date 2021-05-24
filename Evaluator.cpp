@@ -11,34 +11,47 @@ SValueRef evaluateSexpr( Environment& e, SValueRef s );
 SValueRef evaluateNumeric( const std::string& op, SValueRef v );
 SValueRef evaluateDef( Environment& e, SValueRef v );
 
+const Symbol plusSymbol( "+" );
+const Symbol minusSymbol( "-" );
+const Symbol multSymbol( "*" );
+const Symbol divSymbol( "/" );
+
+const Symbol headSymbol( "head" );
+const Symbol tailSymbol( "tail" );
+const Symbol listSymbol( "list" );
+const Symbol joinSymbol( "join" );
+const Symbol evalSymbol( "eval" );
+
+const Symbol defSymbol( "def" );
+
 void addCoreFunctions( Environment& e )
 {
   auto bindNumericOp = []( const std::string& op ) {
     return [ op ]( Environment&, SValueRef v ) -> SValueRef { return evaluateNumeric( op, v ); };
   };
 
-  e[ "+" ] = std::make_shared< SValue >( bindNumericOp( "+" ) );
-  e[ "-" ] = std::make_shared< SValue >( bindNumericOp( "-" ) );
-  e[ "*" ] = std::make_shared< SValue >( bindNumericOp( "*" ) );
-  e[ "/" ] = std::make_shared< SValue >( bindNumericOp( "/" ) );
+  e[ plusSymbol ] = std::make_shared< SValue >( bindNumericOp( "+" ) );
+  e[ minusSymbol ] = std::make_shared< SValue >( bindNumericOp( "-" ) );
+  e[ multSymbol ] = std::make_shared< SValue >( bindNumericOp( "*" ) );
+  e[ divSymbol ] = std::make_shared< SValue >( bindNumericOp( "/" ) );
 
   auto bindListOp = []( auto f ) { return [ f ]( Environment&, SValueRef v ) -> SValueRef { return f( v ); }; };
 
-  e[ "head" ] = std::make_shared< SValue >( bindListOp( head ) );
-  e[ "tail" ] = std::make_shared< SValue >( bindListOp( tail ) );
-  e[ "list" ] = std::make_shared< SValue >( bindListOp( list ) );
-  e[ "join" ] = std::make_shared< SValue >( bindListOp( join ) );
+  e[ headSymbol ] = std::make_shared< SValue >( bindListOp( head ) );
+  e[ tailSymbol ] = std::make_shared< SValue >( bindListOp( tail ) );
+  e[ listSymbol ] = std::make_shared< SValue >( bindListOp( list ) );
+  e[ joinSymbol ] = std::make_shared< SValue >( bindListOp( join ) );
 
-  e[ "eval" ] =
+  e[ evalSymbol ] =
     std::make_shared< SValue >( []( Environment& e, SValueRef v ) -> SValueRef { return evaluate( e, eval( v ) ); } );
 
-  e[ "def" ] = std::make_shared< SValue >( evaluateDef );
+  e[ defSymbol ] = std::make_shared< SValue >( evaluateDef );
 }
 
 SValueRef evaluate( Environment& e, SValueRef s )
 {
   // Symbol
-  if ( auto symLabel = std::get_if< std::string >( &s->value ) )
+  if ( auto symLabel = std::get_if< Symbol >( &s->value ) )
   {
     return reduce( s, getFromEnv( *symLabel, e, s ) );
   }
@@ -97,13 +110,13 @@ SValueRef evaluateDef( Environment& e, SValueRef v )
   REQUIRE( v, symbols->size() == expressions.size(), "Symbol count must match expression count" );
 
   const bool allSymbolsAreSymbolType = std::all_of(
-    symbols->children.cbegin(), symbols->children.cend(), []( const auto& c ) { return c->isType< std::string >(); } );
+    symbols->children.cbegin(), symbols->children.cend(), []( const auto& c ) { return c->isType< Symbol >(); } );
 
   REQUIRE( v, allSymbolsAreSymbolType, "Cannot define for non-symbol type" );
 
   for ( std::size_t i = 0; i < symbols->size(); ++i )
   {
-    addToEnv( e, std::get< std::string >( symbols->children[ i ]->value ), expressions[ i ] );
+    addToEnv( e, std::get< Symbol >( symbols->children[ i ]->value ), expressions[ i ] );
   }
 
   v->value = Sexpr();

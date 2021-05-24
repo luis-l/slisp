@@ -2,6 +2,7 @@
 
 #include "Environment.h"
 #include "SValueRef.h"
+#include "Symbol.h"
 
 #include <functional>
 #include <memory>
@@ -23,7 +24,7 @@ struct Error
 
 using CoreFunction = std::function< SValueRef( Environment&, SValueRef ) >;
 
-using Value = std::variant< Sexpr, QExpr, CoreFunction, std::string, int, Error >;
+using Value = std::variant< Sexpr, QExpr, CoreFunction, Symbol, int, Error >;
 
 using Cells = std::vector< SValueRef >;
 

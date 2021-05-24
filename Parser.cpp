@@ -35,7 +35,7 @@ Value readValue( const std::string& text )
   }
   else
   {
-    return text;
+    return Symbol( text );
   }
 }
 

@@ -8,28 +8,30 @@
 
 SValueRef evaluateSexpr( Environment& e, SValueRef s );
 SValueRef evaluateNumeric( const std::string& op, SValueRef v );
+SValueRef evaluateDef( Environment& e, SValueRef v );
 
 void addCoreFunctions( Environment& e )
 {
-  e[ "+" ] =
-    std::make_shared< SValue >( []( Environment&, SValueRef v ) -> SValueRef { return evaluateNumeric( "+", v ); } );
+  auto bindNumericOp = []( const std::string& op ) {
+    return [ op ]( Environment&, SValueRef v ) -> SValueRef { return evaluateNumeric( op, v ); };
+  };
 
-  e[ "-" ] =
-    std::make_shared< SValue >( []( Environment&, SValueRef v ) -> SValueRef { return evaluateNumeric( "-", v ); } );
+  e[ "+" ] = std::make_shared< SValue >( bindNumericOp( "+" ) );
+  e[ "-" ] = std::make_shared< SValue >( bindNumericOp( "-" ) );
+  e[ "*" ] = std::make_shared< SValue >( bindNumericOp( "*" ) );
+  e[ "/" ] = std::make_shared< SValue >( bindNumericOp( "/" ) );
 
-  e[ "*" ] =
-    std::make_shared< SValue >( []( Environment&, SValueRef v ) -> SValueRef { return evaluateNumeric( "*", v ); } );
+  auto bindListOp = []( auto f ) { return [ f ]( Environment&, SValueRef v ) -> SValueRef { return f( v ); }; };
 
-  e[ "/" ] =
-    std::make_shared< SValue >( []( Environment&, SValueRef v ) -> SValueRef { return evaluateNumeric( "/", v ); } );
-
-  e[ "head" ] = std::make_shared< SValue >( []( Environment&, SValueRef v ) -> SValueRef { return head( v ); } );
-  e[ "tail" ] = std::make_shared< SValue >( []( Environment&, SValueRef v ) -> SValueRef { return tail( v ); } );
-  e[ "list" ] = std::make_shared< SValue >( []( Environment&, SValueRef v ) -> SValueRef { return list( v ); } );
-  e[ "join" ] = std::make_shared< SValue >( []( Environment&, SValueRef v ) -> SValueRef { return join( v ); } );
+  e[ "head" ] = std::make_shared< SValue >( bindListOp( head ) );
+  e[ "tail" ] = std::make_shared< SValue >( bindListOp( tail ) );
+  e[ "list" ] = std::make_shared< SValue >( bindListOp( list ) );
+  e[ "join" ] = std::make_shared< SValue >( bindListOp( join ) );
 
   e[ "eval" ] =
     std::make_shared< SValue >( []( Environment& e, SValueRef v ) -> SValueRef { return evaluate( e, eval( v ) ); } );
+
+  e[ "def" ] = std::make_shared< SValue >( evaluateDef );
 }
 
 SValueRef evaluate( Environment& e, SValueRef s )
@@ -75,6 +77,37 @@ SValueRef evaluateSexpr( Environment& e, SValueRef s )
   {
     return error( "Operation is not callable", s );
   }
+}
+
+SValueRef evaluateDef( Environment& e, SValueRef v )
+{
+  REQUIRE( v, !v->isEmpty(), "Nothing passed to def" );
+  REQUIRE( v, v->argumentCount() >= 2, "def requires 2 or more arguments" );
+
+  // def { x y }   10 20
+  //      symbols  expressions
+  // x = 10, y = 20
+  std::span< SValueRef > args = v->arguments();
+  SValueRef symbols = args.front();
+  std::span< SValueRef > expressions{ std::next( args.begin() ), args.end() };
+
+  REQUIRE( v, symbols->isType< QExpr >(), "def must take a Q-expression for the first argument" );
+  REQUIRE( v, !symbols->isEmpty(), "def requires a non-empty Q-expression for first argument" );
+  REQUIRE( v, symbols->size() == expressions.size(), "Symbol count must match expression count" );
+
+  const bool allSymbolsAreSymbolType = std::all_of(
+    symbols->children.cbegin(), symbols->children.cend(), []( const auto& c ) { return c->isType< std::string >(); } );
+
+  REQUIRE( v, allSymbolsAreSymbolType, "Cannot define for non-symbol type" );
+
+  for ( std::size_t i = 0; i < symbols->size(); ++i )
+  {
+    addToEnv( e, std::get< std::string >( symbols->children[ i ]->value ), expressions[ i ] );
+  }
+
+  v->value = Sexpr();
+  v->children.clear();
+  return v;
 }
 
 // v is an S-expression. e.g. + 1 2 3 5

@@ -126,20 +126,25 @@ SValueRef evaluateDef( Environment& e, SValueRef v )
 }
 
 // v is an S-expression. e.g. + 1 2 3 5
-SValueRef evaluateNumeric( const std::string& op, SValueRef v )
+template < typename NumericT >
+SValueRef evaluateNumericT( const std::string& op, SValueRef v )
 {
+  static_assert(
+    std::is_integral_v< NumericT > || std::is_floating_point_v< NumericT >,
+    "evaluateNumeric must be used with integral or floating point types" );
+
   auto args = v->arguments();
 
-  const bool allIntegral =
-    std::all_of( args.begin(), args.end(), []( const SValueRef s ) { return s->isType< int >(); } );
+  const bool allNumeric =
+    std::all_of( args.begin(), args.end(), []( const SValueRef& s ) { return s->isType< NumericT >(); } );
 
-  REQUIRE( v, allIntegral, "Not all arguments are integral" );
+  REQUIRE( v, allNumeric, "Not all arguments are the same numeric type" );
 
   // Negation
   if ( op == "-" && v->argumentCount() == 1 )
   {
     auto& arg = args.front();
-    arg->apply< int >( std::negate< int >() );
+    arg->apply< NumericT >( std::negate< NumericT >() );
     return reduce( v, arg );
   }
 
@@ -148,15 +153,19 @@ SValueRef evaluateNumeric( const std::string& op, SValueRef v )
   auto integralOperator = [ &op ]() -> AccumulatorFunc {
     if ( op == "+" )
     {
-      return []( SValueRef x, SValueRef y ) -> SValueRef { return concat< int >( x, y, std::plus< int >() ); };
+      return
+        []( SValueRef x, SValueRef y ) -> SValueRef { return concat< NumericT >( x, y, std::plus< NumericT >() ); };
     }
     if ( op == "-" )
     {
-      return []( SValueRef x, SValueRef y ) -> SValueRef { return concat< int >( x, y, std::minus< int >() ); };
+      return
+        []( SValueRef x, SValueRef y ) -> SValueRef { return concat< NumericT >( x, y, std::minus< NumericT >() ); };
     }
     if ( op == "*" )
     {
-      return []( SValueRef x, SValueRef y ) -> SValueRef { return concat< int >( x, y, std::multiplies< int >() ); };
+      return []( SValueRef x, SValueRef y ) -> SValueRef {
+        return concat< NumericT >( x, y, std::multiplies< NumericT >() );
+      };
     }
     if ( op == "/" )
     {
@@ -166,9 +175,9 @@ SValueRef evaluateNumeric( const std::string& op, SValueRef v )
           return x; // Propagate error.
         }
 
-        int yvalue = std::get< int >( y->value );
-        REQUIRE( x, yvalue != 0, "Division by zero" );
-        return concat< int >( x, y, std::divides< int >() );
+        NumericT yvalue = std::get< NumericT >( y->value );
+        REQUIRE( x, yvalue != NumericT{ 0 }, "Division by zero" );
+        return concat< NumericT >( x, y, std::divides< NumericT >() );
       };
     }
 
@@ -176,4 +185,15 @@ SValueRef evaluateNumeric( const std::string& op, SValueRef v )
   };
 
   return reduce( v, std::accumulate( args.begin() + 1, args.end(), args.front(), integralOperator() ) );
+}
+
+SValueRef evaluateNumeric( const std::string& op, SValueRef v )
+{
+  if ( v->arguments().front()->isType< int >() )
+  {
+    return evaluateNumericT< int >( op, v );
+  }
+
+  // Fall back to float.
+  return evaluateNumericT< double >( op, v );
 }

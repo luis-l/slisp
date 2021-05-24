@@ -33,6 +33,10 @@ Value readValue( const std::string& text )
   {
     return std::stoi( text );
   }
+  else if ( isFloat( text ) )
+  {
+    return std::stod( text );
+  }
   else
   {
     return Symbol( text );

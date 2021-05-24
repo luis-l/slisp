@@ -27,3 +27,15 @@ void Environment::set( const Symbol& sym, SValueRef v )
 {
   env[ sym ] = std::make_shared< SValue >( *v );
 }
+
+void Environment::rootSet( const Symbol& s, SValueRef v )
+{
+  // Find root. An environment with no parent.
+  Environment* root = this;
+  while ( root->parent )
+  {
+    root = root->parent;
+  }
+
+  root->set( s, v );
+}

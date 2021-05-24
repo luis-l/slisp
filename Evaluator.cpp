@@ -105,8 +105,6 @@ SValueRef evaluateSexpr( Environment& e, SValueRef s )
 
 SValueRef invokeLambda( Lambda& l, Environment& e, SValueRef s )
 {
-  l.env.parent = &e;
-
   std::span< SValueRef > sArgs = s->arguments();
   Cells& formalCells = l.formals->children;
 
@@ -128,6 +126,7 @@ SValueRef invokeLambda( Lambda& l, Environment& e, SValueRef s )
   // Do full function application
   if ( argCount == formalCount )
   {
+    l.env.parent = &e;
     SValueRef wrappedBody = std::make_shared< SValue >( Sexpr() );
     SValueRef bodyCopy = std::make_shared< SValue >( *l.body );
     wrappedBody->children.push_back( std::make_shared< SValue >( Symbol( "eval" ) ) );
@@ -187,7 +186,7 @@ SValueRef evaluateDef( Environment& e, SValueRef v )
 
   for ( std::size_t i = 0; i < symbols->size(); ++i )
   {
-    e.set( std::get< Symbol >( symbols->children[ i ]->value ), expressions[ i ] );
+    e.rootSet( std::get< Symbol >( symbols->children[ i ]->value ), expressions[ i ] );
   }
 
   v->value = Sexpr();

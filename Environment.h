@@ -14,6 +14,9 @@ public:
   SValueRef get( const Symbol& s ) const;
   void set( const Symbol& s, SValueRef );
 
+  // Defines the symbol at the root.
+  void rootSet( const Symbol& s, SValueRef );
+
   Environment* parent = nullptr;
 
 private:

@@ -133,10 +133,15 @@ SValueRef reduce( SValueRef parent, SValueRef child );
 
 std::unordered_map< const SValue*, std::size_t > getDepths( const SValue& r );
 
+/// @brief Show the SValue as an expression string.
+std::ostream& show( std::ostream& o, const SValue& r );
+
+/// @brief Show the SValue as a tree.
+std::ostream& operator<<( std::ostream& o, const SValue& r );
+
 std::ostream& operator<<( std::ostream& o, const Sexpr& t );
 std::ostream& operator<<( std::ostream& o, const QExpr& t );
 std::ostream& operator<<( std::ostream& o, const Error& e );
-std::ostream& operator<<( std::ostream& o, const SValue& r );
 std::ostream& operator<<( std::ostream& o, const CoreFunction& f );
 
 template < typename... Args >

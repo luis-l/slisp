@@ -37,7 +37,7 @@ public:
           out << *root << '\n';
 
           auto result = evaluate( globalEnv, root );
-          out << result->value << '\n';
+          show( out, *result ) << "\n\n";
 
           out << "Evaluation Tree\n";
           out << *root << '\n';

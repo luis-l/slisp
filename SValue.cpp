@@ -25,6 +25,55 @@ std::unordered_map< const SValue*, std::size_t > getDepths( const SValue& r )
   return depths;
 }
 
+std::ostream& showExpression( std::ostream& o, const SValue& r )
+{
+  int i = 0;
+  for ( const auto& child : r.children )
+  {
+    show( o, *child );
+    if ( ++i < r.children.size() )
+    {
+      o << ' ';
+    }
+  }
+
+  return o;
+}
+
+std::ostream& show( std::ostream& o, const SValue& r )
+{
+  if ( r.isType< Sexpr >() )
+  {
+    o << '(';
+    showExpression( o, r );
+    o << ')';
+  }
+  else if ( r.isType< QExpr >() )
+  {
+    o << '{';
+    showExpression( o, r );
+    o << '}';
+  }
+  else
+  {
+    o << r.value;
+  }
+
+  return o;
+}
+
+std::ostream& operator<<( std::ostream& o, const SValue& r )
+{
+  const std::unordered_map< const SValue*, std::size_t > depths = getDepths( r );
+
+  traversePreorder( r, [ &depths, &o ]( const SValue& v ) {
+    const std::string padding( depths.at( &v ) * 2, ' ' );
+    o << padding << "value: '" << v.value << "'\n";
+  } );
+
+  return o;
+}
+
 std::ostream& operator<<( std::ostream& o, const Sexpr& t )
 {
   return o << "sexpr";
@@ -38,18 +87,6 @@ std::ostream& operator<<( std::ostream& o, const QExpr& t )
 std::ostream& operator<<( std::ostream& o, const Error& e )
 {
   return o << "Error: " << e.message;
-}
-
-std::ostream& operator<<( std::ostream& o, const SValue& r )
-{
-  const std::unordered_map< const SValue*, std::size_t > depths = getDepths( r );
-
-  traversePreorder( r, [ &depths, &o ]( const SValue& v ) {
-    const std::string padding( depths.at( &v ) * 2, ' ' );
-    o << padding << "value: '" << v.value << "'\n";
-  } );
-
-  return o;
 }
 
 std::ostream& operator<<( std::ostream& o, const CoreFunction& f )

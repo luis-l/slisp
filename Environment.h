@@ -8,4 +8,5 @@
 
 using Environment = std::unordered_map< std::string, SValueRef >;
 
-SValueRef getSymbol( const std::string& sym, Environment& e, SValueRef v );
+// Get a copy for the symbol from the environment.
+SValueRef getFromEnv( const std::string& sym, Environment& e, SValueRef v );

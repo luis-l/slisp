@@ -126,10 +126,10 @@ void traverseLevelOrder( const SValue& r, BinaryOp f )
 /// @brief Create an error for the given S-expression.
 SValueRef error( const std::string& message, SValueRef v );
 
-/// @brief The parent becomes the child. This is used to evaluate and reduce S-expressions.
+/// @brief The parent "becomes" the child. This is used to evaluate and reduce S-expressions.
 /// As shown, the inner S-expressions are evaluated and reduced to smaller S-expressions.
 /// @code ( + (* 10 10 ) ( - 5 2 ) ) -> ( + 100 3 ) -> 103
-SValueRef reduce( SValueRef& parent, SValueRef child );
+SValueRef reduce( SValueRef parent, SValueRef child );
 
 std::unordered_map< const SValue*, std::size_t > getDepths( const SValue& r );
 

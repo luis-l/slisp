@@ -3,6 +3,8 @@
 
 #include "SValue.h"
 
+#include <numeric>
+
 // v is an S-expression. e.g. (op qexpr)
 SValueRef head( SValueRef v )
 {
@@ -32,6 +34,7 @@ SValueRef tail( SValueRef v )
   // Remove the front.
   qexpr->children.erase( qexpr->children.begin() );
   return reduce( v, qexpr );
+  //return qexpr;
 }
 
 SValueRef list( SValueRef v )
@@ -43,9 +46,11 @@ SValueRef list( SValueRef v )
 
 SValueRef eval( SValueRef v )
 {
-  REQUIRE( v, v->isType< QExpr >(), "eval must take a Q-expression" );
+  SValueRef arg = v->arguments().front();
+
+  REQUIRE( v, arg->isType< QExpr >(), "eval must take a Q-expression" );
   v->value = Sexpr();
-  v->children.erase( v->children.begin() ); // Drop the operation "eval". Keep args.
+  v->children = std::move( v->arguments().front()->children ); // Take Q-expression children as S-expression children.
   return v;
 }
 
@@ -65,13 +70,15 @@ SValueRef join( SValueRef v )
 
   REQUIRE( v, allQexprs, "join must take Q-expressions" );
 
-  auto& concat = args.front();
+  SValueRef concat = args.front();
 
-  std::for_each( args.begin() + 1, args.end(), [ &concat ]( auto& child ) {
+  std::for_each( std::next( args.begin() ), args.end(), [ concat ]( auto& child ) {
     concat->children.insert(
       concat->children.end(),
       std::make_move_iterator( child->children.begin() ),
       std::make_move_iterator( child->children.end() ) );
+
+    child->children.clear();
   } );
 
   return reduce( v, concat );

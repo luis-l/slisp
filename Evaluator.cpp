@@ -26,8 +26,10 @@ void addCoreFunctions( Environment& e )
   e[ "head" ] = std::make_shared< SValue >( []( Environment&, SValueRef v ) -> SValueRef { return head( v ); } );
   e[ "tail" ] = std::make_shared< SValue >( []( Environment&, SValueRef v ) -> SValueRef { return tail( v ); } );
   e[ "list" ] = std::make_shared< SValue >( []( Environment&, SValueRef v ) -> SValueRef { return list( v ); } );
-  e[ "eval" ] = std::make_shared< SValue >( []( Environment&, SValueRef v ) -> SValueRef { return eval( v ); } );
   e[ "join" ] = std::make_shared< SValue >( []( Environment&, SValueRef v ) -> SValueRef { return join( v ); } );
+
+  e[ "eval" ] =
+    std::make_shared< SValue >( []( Environment& e, SValueRef v ) -> SValueRef { return evaluate( e, eval( v ) ); } );
 }
 
 SValueRef evaluate( Environment& e, SValueRef s )
@@ -35,7 +37,7 @@ SValueRef evaluate( Environment& e, SValueRef s )
   // Symbol
   if ( auto symLabel = std::get_if< std::string >( &s->value ) )
   {
-    return reduce( s, getSymbol( *symLabel, e, s ) );
+    return reduce( s, getFromEnv( *symLabel, e, s ) );
   }
 
   if ( s->isType< Sexpr >() )

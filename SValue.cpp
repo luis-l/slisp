@@ -11,9 +11,10 @@ SValueRef error( const std::string& message, SValueRef v )
   return v;
 }
 
-SValueRef reduce( SValueRef& parent, SValueRef child )
+SValueRef reduce( SValueRef parent, SValueRef child )
 {
-  parent = std::move( child );
+  parent->value = std::move( child->value );
+  parent->children = std::move( child->children );
   return parent;
 }
 

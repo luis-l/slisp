@@ -3,6 +3,7 @@
 
 #include "SValue.h"
 
+#include <algorithm>
 #include <numeric>
 
 // v is an S-expression. e.g. (op qexpr)

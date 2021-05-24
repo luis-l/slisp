@@ -1,5 +1,6 @@
 
 #include "SValue.h"
+#include "Traversal.h"
 
 #include <assert.h>
 #include <ostream>

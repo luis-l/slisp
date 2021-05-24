@@ -3,6 +3,7 @@
 #include "ListOperations.h"
 #include "SValue.h"
 
+#include <algorithm>
 #include <functional>
 #include <numeric>
 

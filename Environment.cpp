@@ -2,15 +2,16 @@
 #include "Environment.h"
 #include "SValue.h"
 
-SValueRef getFromEnv( const Symbol& sym, Environment& e, SValueRef v )
+SValueRef Environment::get( const Symbol& sym ) const
 {
-  auto it = e.find( sym );
-  REQUIRE( v, it != e.end(), sym.label + " not found" );
-  // Make an SValue copy.
-  return std::make_shared< SValue >( *it->second );
+  auto value = std::make_shared< SValue >();
+  auto it = env.find( sym );
+  REQUIRE( value, it != env.end(), sym.label + " not found" );
+  *value = *it->second; // Copy
+  return value;
 }
 
-void addToEnv( Environment& e, const Symbol& sym, SValueRef v )
+void Environment::set( const Symbol& sym, SValueRef v )
 {
-  e[ sym ] = std::make_shared< SValue >( *v );
+  env[ sym ] = std::make_shared< SValue >( *v );
 }

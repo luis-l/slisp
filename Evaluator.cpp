@@ -30,22 +30,23 @@ void addCoreFunctions( Environment& e )
     return [ op ]( Environment&, SValueRef v ) -> SValueRef { return evaluateNumeric( op, v ); };
   };
 
-  e[ plusSymbol ] = std::make_shared< SValue >( bindNumericOp( "+" ) );
-  e[ minusSymbol ] = std::make_shared< SValue >( bindNumericOp( "-" ) );
-  e[ multSymbol ] = std::make_shared< SValue >( bindNumericOp( "*" ) );
-  e[ divSymbol ] = std::make_shared< SValue >( bindNumericOp( "/" ) );
+  e.set( plusSymbol, std::make_shared< SValue >( bindNumericOp( "+" ) ) );
+  e.set( minusSymbol, std::make_shared< SValue >( bindNumericOp( "-" ) ) );
+  e.set( multSymbol, std::make_shared< SValue >( bindNumericOp( "*" ) ) );
+  e.set( divSymbol, std::make_shared< SValue >( bindNumericOp( "/" ) ) );
 
   auto bindListOp = []( auto f ) { return [ f ]( Environment&, SValueRef v ) -> SValueRef { return f( v ); }; };
 
-  e[ headSymbol ] = std::make_shared< SValue >( bindListOp( head ) );
-  e[ tailSymbol ] = std::make_shared< SValue >( bindListOp( tail ) );
-  e[ listSymbol ] = std::make_shared< SValue >( bindListOp( list ) );
-  e[ joinSymbol ] = std::make_shared< SValue >( bindListOp( join ) );
+  e.set( headSymbol, std::make_shared< SValue >( bindListOp( head ) ) );
+  e.set( tailSymbol, std::make_shared< SValue >( bindListOp( tail ) ) );
+  e.set( listSymbol, std::make_shared< SValue >( bindListOp( list ) ) );
+  e.set( joinSymbol, std::make_shared< SValue >( bindListOp( join ) ) );
 
-  e[ evalSymbol ] =
-    std::make_shared< SValue >( []( Environment& e, SValueRef v ) -> SValueRef { return evaluate( e, eval( v ) ); } );
+  e.set( evalSymbol, std::make_shared< SValue >( []( Environment& e, SValueRef v ) -> SValueRef {
+           return evaluate( e, eval( v ) );
+         } ) );
 
-  e[ defSymbol ] = std::make_shared< SValue >( evaluateDef );
+  e.set( defSymbol, std::make_shared< SValue >( evaluateDef ) );
 }
 
 SValueRef evaluate( Environment& e, SValueRef s )
@@ -53,7 +54,7 @@ SValueRef evaluate( Environment& e, SValueRef s )
   // Symbol
   if ( auto symLabel = std::get_if< Symbol >( &s->value ) )
   {
-    return reduce( s, getFromEnv( *symLabel, e, s ) );
+    return reduce( s, e.get( *symLabel ) );
   }
 
   if ( s->isType< Sexpr >() )
@@ -116,7 +117,7 @@ SValueRef evaluateDef( Environment& e, SValueRef v )
 
   for ( std::size_t i = 0; i < symbols->size(); ++i )
   {
-    addToEnv( e, std::get< Symbol >( symbols->children[ i ]->value ), expressions[ i ] );
+    e.set( std::get< Symbol >( symbols->children[ i ]->value ), expressions[ i ] );
   }
 
   v->value = Sexpr();

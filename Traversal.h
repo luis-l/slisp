@@ -19,8 +19,8 @@ void traversePreorder( const SValue& r, UnaryOp f )
   }
 }
 
-template < typename BinaryOp >
-void traverseLevelOrder( const SValue& r, BinaryOp f )
+template < typename CompareOp >
+void traverseLevelOrder( const SValue& r, CompareOp f )
 {
   std::queue< const SValue* > traversal;
   traversal.push( &r );

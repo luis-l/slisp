@@ -2,6 +2,8 @@
 #include "Environment.h"
 #include "SValue.h"
 
+#include <iomanip>
+
 Environment::Environment( Environment* parent ) : parent( parent )
 {}
 
@@ -43,4 +45,14 @@ void Environment::rootSet( const Symbol& s, const SValue& v )
   }
 
   root->set( s, v );
+}
+
+std::ostream& operator<<( std::ostream& o, const Environment& e )
+{
+  for ( const auto& [ symbol, value ] : e.env )
+  {
+    o << std::setw( 10 ) << symbol << ": ";
+    show( o, *value ) << '\n';
+  }
+  return o;
 }

@@ -25,9 +25,13 @@ public:
   Environment* parent = nullptr;
 
 private:
+  friend std::ostream& operator<<( std::ostream& o, const Environment& e );
+
   // If we want to use a map, then the SValues must be stored as shared_ptr. (or other indirection that supports copy).
   // This is because map can modify the internal buffer and do copies.
   //
   // If using a vector to store, we could use unique_ptr
   std::unordered_map< Symbol, std::shared_ptr< SValue >, SymbolHash > env;
 };
+
+std::ostream& operator<<( std::ostream& o, const Environment& e );

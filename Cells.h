@@ -45,6 +45,11 @@ public:
   ValueT::iterator begin();
   ValueT::iterator end();
 
+  ValueT::const_iterator cbegin() const;
+  ValueT::const_iterator cend() const;
+
+  bool operator==( const Cells& other ) const;
+
 private:
   ValueT data;
 };

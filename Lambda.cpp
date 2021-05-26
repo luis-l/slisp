@@ -39,3 +39,8 @@ Lambda& Lambda::operator=( Lambda&& other ) noexcept
   }
   return *this;
 }
+
+bool Lambda::operator==( const Lambda& other ) const
+{
+  return ( *formals == *other.formals ) && ( *body == *other.body );
+}

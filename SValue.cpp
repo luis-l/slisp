@@ -5,6 +5,22 @@
 #include <assert.h>
 #include <ostream>
 
+bool Error::operator==( const Error& e ) const
+{
+  return message == e.message;
+}
+
+bool QExpr::operator==( const QExpr& e ) const
+{
+  return cells == e.cells;
+}
+
+bool operator==( const CoreFunction& left, const CoreFunction& right )
+{
+  // TODO: Check for correctness.
+  return &left == &right;
+}
+
 std::unique_ptr< SValue > makeDefaultSValue()
 {
   return std::make_unique< SValue >();
@@ -178,4 +194,14 @@ std::size_t SValue::size() const
 {
   const Cells* c = cells();
   return c ? c->size() : 0;
+}
+
+bool SValue::operator==( const SValue& other ) const
+{
+  return value == other.value;
+}
+
+std::ostream& operator<<( std::ostream& o, const Boolean other )
+{
+  return o << ( other == Boolean::True ? "true" : "false" );
 }

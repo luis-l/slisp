@@ -12,10 +12,13 @@ const std::regex integerRegex( "-?[0-9]+" );
 /// 0. and .0 are not supported.
 const std::regex floatRegex( "-?[0-9]+[.][0-9]+" );
 
-// + 1 2 3 4
-// + (* 1 2 3) (- 10 10)
-// op arg+                       zero or more arguments
-// exp: atom | op exp+
+const std::regex stringLiteralRegex( R"("(\\.|[^"])*")" );
+//const std::regex stringLiteralRegex( "\"(\\\\.|[^\"])*\"" );
+
+bool isBool( const std::string& s )
+{
+  return s == "true" || s == "false";
+}
 
 bool isInteger( const std::string& s )
 {
@@ -27,9 +30,19 @@ bool isFloat( const std::string& s )
   return std::regex_match( s, floatRegex );
 }
 
+// String literals is quoted text.
+bool isStringLiteral( const std::string& s )
+{
+  return std::regex_match( s, stringLiteralRegex );
+}
+
 Value readValue( const std::string& text )
 {
-  if ( isInteger( text ) )
+  if ( isBool( text ) )
+  {
+    return Boolean( text == "true" ? Boolean::True : Boolean::False );
+  }
+  else if ( isInteger( text ) )
   {
     return std::stoi( text );
   }
@@ -116,13 +129,37 @@ std::unique_ptr< SValue > parse( IteratorT begin, IteratorT end )
   while ( it != end )
   {
     it = std::find_if( it, end, [ isValidSymbol, isParen, isBraces ]( unsigned char c ) {
-      return isParen( c ) || isBraces( c ) || isValidSymbol( c );
+      return isParen( c ) || isBraces( c ) || isValidSymbol( c ) || c == '"';
     } );
 
     if ( it != end )
     {
       const unsigned char c = *it;
-      if ( c == '(' )
+
+      // begin String literal
+      if ( c == '"' )
+      {
+        std::smatch stringMatch;
+
+        // regex search does not like temporary strings. Cannot seemd to get iterators to work with it.
+        std::string text( begin, end );
+
+        const bool stringFound = std::regex_search( text, stringMatch, stringLiteralRegex );
+        if ( stringFound )
+        {
+          const std::string stringText = stringMatch.str();
+          appendCellOnly( stringText );
+          const auto offset = stringMatch.position() + stringMatch.length();
+          it += offset;
+          continue;
+        }
+        else
+        {
+          throw std::runtime_error( "Missing string literal quote" );
+        }
+      }
+
+      else if ( c == '(' )
       {
         appendAndTraverseCell( Cells() );
       }

@@ -114,6 +114,16 @@ Cells::ValueT::iterator Cells::end()
   return data.end();
 }
 
+Cells::ValueT::const_iterator Cells::cbegin() const
+{
+  return data.cbegin();
+}
+
+Cells::ValueT::const_iterator Cells::cend() const
+{
+  return data.cend();
+}
+
 SValue* Cells::operator[]( std::size_t index )
 {
   return data[ index ].get();
@@ -122,4 +132,12 @@ SValue* Cells::operator[]( std::size_t index )
 const SValue* Cells::operator[]( std::size_t index ) const
 {
   return data[ index ].get();
+}
+
+bool Cells::operator==( const Cells& other ) const
+{
+  return std::equal(
+    data.cbegin(), data.cend(), other.cbegin(), other.cend(), []( const auto& left, const auto& right ) {
+      return *left == *right;
+    } );
 }

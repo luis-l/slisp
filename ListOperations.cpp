@@ -37,11 +37,18 @@ SValue* tail( SValue* v )
 
   Cells& qexprCells = qexpr->cellsRequired();
 
+  if ( qexprCells.isEmpty() )
+  {
+    v->value = QExpr();
+    return v;
+  }
+
   // Remove the front.
   qexprCells.drop( qexprCells.begin() );
 
   // V becomes Q-expression.
-  std::swap( *v, *qexpr );
+  //std::swap( *v, *qexpr );
+  v->value = QExpr( std::move( qexprCells ) );
   return v;
 }
 

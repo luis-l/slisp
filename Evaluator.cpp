@@ -4,9 +4,7 @@
 #include "Numeric.h"
 #include "SValue.h"
 
-#include <algorithm>
-#include <functional>
-#include <numeric>
+#include <type_traits>
 
 SValue* evaluateSexpr( Environment& e, SValue* s );
 SValue* evaluateNumeric( const std::string& op, SValue* v );
@@ -14,6 +12,17 @@ SValue* evaluateDef( Environment& e, SValue* v );
 SValue* evaluateLambda( Environment& e, SValue* v );
 SValue* invokeLambda( Lambda&, Environment& e, SValue* v );
 SValue* evalQexpr( Environment& e, SValue* v );
+
+SValue* evalLesser( Environment& e, SValue* v );
+SValue* evalLesserEqual( Environment& e, SValue* v );
+
+SValue* evalGreater( Environment& e, SValue* v );
+SValue* evalGreaterEqual( Environment& e, SValue* v );
+
+SValue* evalEquality( Environment& e, SValue* v );
+SValue* evalNotEqual( Environment& e, SValue* v );
+
+SValue* evalConditional( Environment& e, SValue* v );
 
 const Symbol plusSymbol( "+" );
 const Symbol minusSymbol( "-" );
@@ -28,6 +37,17 @@ const Symbol evalSymbol( "eval" );
 
 const Symbol defSymbol( "def" );
 const Symbol lambdaSymbol( "\\" );
+
+const Symbol lesserSymbol( "<" );
+const Symbol lesserEqualSymbol( "<=" );
+
+const Symbol greaterSymbol( ">" );
+const Symbol greaterEqualSymbol( ">=" );
+
+const Symbol equalSymbol( "eq" );
+const Symbol notEqualSymbol( "neq" );
+
+const Symbol conditionalSymbol( "if" );
 
 void addCoreFunctions( Environment& e )
 {
@@ -49,6 +69,17 @@ void addCoreFunctions( Environment& e )
   e.set( evalSymbol, SValue( []( Environment& e, SValue* v ) -> SValue* { return evalQexpr( e, v ); } ) );
   e.set( defSymbol, SValue( evaluateDef ) );
   e.set( lambdaSymbol, SValue( evaluateLambda ) );
+
+  e.set( lesserSymbol, SValue( evalLesser ) );
+  e.set( lesserEqualSymbol, SValue( evalLesserEqual ) );
+
+  e.set( greaterSymbol, SValue( evalGreater ) );
+  e.set( greaterEqualSymbol, SValue( evalGreaterEqual ) );
+
+  e.set( equalSymbol, SValue( evalEquality ) );
+  e.set( notEqualSymbol, SValue( evalNotEqual ) );
+
+  e.set( conditionalSymbol, SValue( evalConditional ) );
 }
 
 SValue* evaluate( Environment& e, SValue* v )
@@ -56,12 +87,12 @@ SValue* evaluate( Environment& e, SValue* v )
   // Symbol
   if ( auto symbol = v->getIf< Symbol >() )
   {
-    return e.get( *symbol, v );
+    v = e.get( *symbol, v );
   }
 
   if ( v->isSExpression() )
   {
-    return evaluateSexpr( e, v );
+    v = evaluateSexpr( e, v );
   }
 
   return v;
@@ -95,6 +126,12 @@ SValue* evaluateSexpr( Environment& e, SValue* s )
   else if ( auto l = operation->getIf< Lambda >() )
   {
     return invokeLambda( *l, e, s );
+  }
+  else if ( operation->isSExpression() && operation->isEmpty() )
+  { // Ignore Empty S-expression
+    // Special case feature. Allow multiple definitions within an S-expression.
+    // e.g.  (def {a} 10) (def {b} 20 ) ( def {c} 30 ) ==> ()
+    return evaluate( e, s ); // Evaluate the rest
   }
   else
   {
@@ -243,4 +280,104 @@ SValue* evalQexpr( Environment& e, SValue* v )
   // Move the Q-expression cells into an S-expression.
   v->value = Cells{ std::move( qexprCells ) };
   return evaluate( e, v );
+}
+
+template < typename T, typename CompareOp >
+SValue* evaluateCompare( SValue* v, CompareOp compare )
+{
+  REQUIRE( v, v->size() == 2, "Expects two arguments" );
+
+  Cells& cells = v->cellsRequired();
+  std::unique_ptr< SValue > left = cells.takeFront();
+  REQUIRE( v, left->isType< T >(), "Got incorrect type" );
+
+  std::unique_ptr< SValue > right = cells.takeFront();
+  REQUIRE( v, right->isType< T >(), "Got incorrect type" );
+
+  v->value = compare( left->get< T >(), right->get< T >() ) ? Boolean::True : Boolean::False;
+  return v;
+}
+
+template < typename CompareOp >
+SValue* evalCellsCompare( SValue* v, CompareOp binaryOp )
+{
+  Cells& cells = v->cellsRequired();
+  if ( cells.front()->isType< int >() )
+  {
+    return evaluateCompare< int >( v, binaryOp );
+  }
+  return evaluateCompare< double >( v, binaryOp );
+}
+
+SValue* evalLesser( Environment& e, SValue* v )
+{
+  return evalCellsCompare( v, std::less<>() );
+}
+
+SValue* evalLesserEqual( Environment& e, SValue* v )
+{
+  return evalCellsCompare( v, std::less_equal<>() );
+}
+
+SValue* evalGreater( Environment& e, SValue* v )
+{
+  return evalCellsCompare( v, std::greater<>() );
+}
+
+SValue* evalGreaterEqual( Environment& e, SValue* v )
+{
+  return evalCellsCompare( v, std::greater_equal<>() );
+}
+
+SValue* evalEquality( Environment& e, SValue* v )
+{
+  Cells& cells = v->cellsRequired();
+  std::unique_ptr< SValue > first = cells.takeFront();
+  while ( !cells.isEmpty() )
+  {
+    std::unique_ptr< SValue > other = cells.takeFront();
+    const bool isEqual = *first == *other;
+    if ( !isEqual )
+    {
+      v->value = Boolean::False;
+      return v;
+    }
+  }
+
+  // All equal.
+  v->value = Boolean::True;
+  return v;
+}
+
+SValue* evalNotEqual( Environment& e, SValue* v )
+{
+  v = evalEquality( e, v );
+  v->value = v->get< Boolean >() == Boolean::True ? Boolean::False : Boolean::True;
+  return v;
+}
+
+SValue* evalConditional( Environment& e, SValue* v )
+{
+  Cells& cells = v->cellsRequired();
+  std::unique_ptr< SValue > condition = cells.takeFront();
+  REQUIRE( v, condition->isType< Boolean >(), "if expects boolean as first argument" );
+
+  std::unique_ptr< SValue > first = cells.takeFront();
+  REQUIRE( v, first->isQExpression(), "if expects Q-expression as second argument" );
+
+  std::unique_ptr< SValue > second = cells.takeFront();
+  REQUIRE( v, second->isQExpression(), "if expects Q-expression as third argument" );
+
+  if ( condition->get< Boolean >() == Boolean::True )
+  {
+    // Make the first argument to an S-expression so it can be evaulated.
+    v->value = Cells( std::move( first->cellsRequired() ) );
+    return evaluate( e, v );
+  }
+  else
+  {
+    // Make the second argument to an S-expression so it can be evaulated.
+    v->value = Cells( std::move( second->cellsRequired() ) );
+    return evaluate( e, v );
+  }
 }

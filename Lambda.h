@@ -19,6 +19,8 @@ struct Lambda
   Lambda( Lambda&& other ) noexcept;
   Lambda& operator=( Lambda&& other ) noexcept;
 
+  bool operator==( const Lambda& other ) const;
+
   Environment env;
   std::unique_ptr< SValue > formals;
   std::unique_ptr< SValue > body;

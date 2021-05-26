@@ -16,6 +16,8 @@ class SValue;
 struct Error
 {
   std::string message;
+
+  bool operator==( const Error& e ) const;
 };
 
 /// A built-in function.
@@ -24,13 +26,52 @@ struct Error
 /// It returns the new, evalauted S-expression.
 using CoreFunction = std::function< SValue*( Environment&, SValue* v ) >;
 
+bool operator==( const CoreFunction& left, const CoreFunction& right );
+
 struct QExpr
 {
   // Q-expressions contain cells that are not evaluated.
   Cells cells;
+
+  bool operator==( const QExpr& e ) const;
 };
 
-using Value = std::variant< Cells, QExpr, CoreFunction, Symbol, Lambda, int, double, Error >;
+/// Wrapper for bool type so it works with std::variant.
+/// Using bool in std::variant can cause issues due to implicit conversions.
+enum class Boolean
+{
+  False,
+  True
+};
+
+// Alternative Boolean Wrapper.
+// TODO: Decide to use Wrapper or Enum
+//struct Boolean
+//{
+//  bool value = false;
+//
+//  Boolean() = default;
+//
+//  explicit Boolean( bool v ) : value( v )
+//  {}
+//
+//  template < typename T >
+//  Boolean( T ) = delete;
+//
+//  bool operator==( const bool other ) const
+//  {
+//    return value == other;
+//  }
+//
+//  operator bool() const
+//  {
+//    return value;
+//  }
+//};
+
+std::ostream& operator<<( std::ostream& o, const Boolean other );
+
+using Value = std::variant< Cells, QExpr, CoreFunction, Symbol, Lambda, int, double, Boolean, std::string, Error >;
 
 class SValue
 {
@@ -56,6 +97,8 @@ public:
 
   /// Get the children count for S-expressions or Q-expressions. For other types, it is always 0.
   std::size_t size() const;
+
+  bool operator==( const SValue& other ) const;
 
   template < typename T >
   bool isType() const

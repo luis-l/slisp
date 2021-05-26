@@ -1,6 +1,8 @@
 #pragma once
 
+#include "Cells.h"
 #include "Environment.h"
+#include "Lambda.h"
 #include "Symbol.h"
 
 #include <functional>
@@ -14,128 +16,6 @@ class SValue;
 struct Error
 {
   std::string message;
-};
-
-// \  { x y }         {+ x y}
-//    formals qexpr   body qexpr
-struct Lambda
-{
-  Lambda() = default;
-
-  Lambda( Environment e, std::unique_ptr< SValue > formals, std::unique_ptr< SValue > body )
-  : env( std::move( e ) ), formals( std::move( formals ) ), body( std::move( body ) )
-  {}
-
-  Lambda( const Lambda& other )
-  {
-    *this = other;
-  }
-
-  Lambda& operator=( const Lambda& other )
-  {
-    if ( this != &other )
-    {
-      env = other.env;
-      formals = std::make_unique< SValue >( *other.formals );
-      body = std::make_unique< SValue >( *other.body );
-    }
-    return *this;
-  }
-
-  Lambda( Lambda&& other ) noexcept
-  {
-    *this = std::move( other );
-  }
-
-  Lambda& operator=( Lambda&& other ) noexcept
-  {
-    if ( this != &other )
-    {
-      env = std::move( other.env );
-      formals = std::move( other.formals );
-      body = std::move( other.body );
-    }
-    return *this;
-  }
-
-  Environment env;
-  std::unique_ptr< SValue > formals;
-  std::unique_ptr< SValue > body;
-};
-
-// Cells are Semi-Regular type.
-class Cells
-{
-public:
-  using ValueT = std::vector< std::unique_ptr< SValue > >;
-
-  Cells() = default;
-  Cells( ValueT data ) : data( std::move( data ) )
-  {}
-
-  Cells( const Cells& other );
-  Cells& operator=( const Cells& other );
-
-  Cells( Cells&& other ) noexcept;
-  Cells& operator=( Cells&& other ) noexcept;
-
-  std::size_t size() const;
-
-  bool isEmpty() const;
-
-  const ValueT& children() const;
-  ValueT& children();
-
-  void append( std::unique_ptr< SValue > v );
-
-  std::unique_ptr< SValue > takeFront();
-
-  void drop( ValueT::iterator begin, ValueT::iterator end );
-  void drop( ValueT::iterator pos )
-  {
-    data.erase( pos );
-  }
-
-  void clear()
-  {
-    data.clear();
-  }
-
-  SValue* operator[]( std::size_t index )
-  {
-    return data[ index ].get();
-  }
-
-  const SValue* operator[]( std::size_t index ) const
-  {
-    return data[ index ].get();
-  }
-
-  SValue* front()
-  {
-    return data.front().get();
-  }
-
-  const SValue* front() const
-  {
-    return data.front().get();
-  }
-
-  SValue* back();
-  const SValue* back() const;
-
-  ValueT::iterator begin()
-  {
-    return data.begin();
-  }
-
-  ValueT::iterator end()
-  {
-    return data.end();
-  }
-
-private:
-  ValueT data;
 };
 
 /// A built-in function.

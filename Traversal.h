@@ -15,10 +15,7 @@ void traversePreorder( const SValue& r, UnaryOp f )
     const SValue* n = traversal.top();
     traversal.pop();
     f( *n );
-    for ( const auto& child : n->children )
-    {
-      traversal.push( child.get() );
-    }
+    n->foreachCell( [ &traversal ]( const SValue& child ) { traversal.push( &child ); } );
   }
 }
 
@@ -47,10 +44,6 @@ void traverseLevelOrder( const SValue& r, BinaryOp f )
     const SValue* n = traversal.front();
     traversal.pop();
     f( *n, level );
-
-    for ( const auto& child : n->children )
-    {
-      traversal.push( child.get() );
-    }
+    n->foreachCell( [ &traversal ]( const SValue& child ) { traversal.push( &child ); } );
   }
 }

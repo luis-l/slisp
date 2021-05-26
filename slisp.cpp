@@ -35,8 +35,9 @@ public:
           auto root = parse( input.cbegin(), input.cend() );
           out << "Evaluation Tree\n";
           out << *root << '\n';
+          show( out, *root ) << "\n\n";
 
-          auto result = evaluate( globalEnv, root );
+          auto result = evaluate( globalEnv, root.get() );
           show( out, *result ) << "\n\n";
 
           out << "Evaluation Tree\n";

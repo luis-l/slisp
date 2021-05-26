@@ -8,11 +8,12 @@
 #include <functional>
 #include <numeric>
 
-SValueRef evaluateSexpr( Environment& e, SValueRef s );
-SValueRef evaluateNumeric( const std::string& op, SValueRef v );
-SValueRef evaluateDef( Environment& e, SValueRef v );
-SValueRef evaluateLambda( Environment& e, SValueRef v );
-SValueRef invokeLambda( Lambda&, Environment& e, SValueRef v );
+SValue* evaluateSexpr( Environment& e, SValue* s );
+SValue* evaluateNumeric( const std::string& op, SValue* v );
+SValue* evaluateDef( Environment& e, SValue* v );
+SValue* evaluateLambda( Environment& e, SValue* v );
+SValue* invokeLambda( Lambda&, Environment& e, SValue* v );
+SValue* evalQexpr( Environment& e, SValue* v );
 
 const Symbol plusSymbol( "+" );
 const Symbol minusSymbol( "-" );
@@ -30,52 +31,45 @@ const Symbol lambdaSymbol( "\\" );
 
 void addCoreFunctions( Environment& e )
 {
-  auto bindNumericOp = []( const std::string& op ) {
-    return [ op ]( Environment&, SValueRef v ) -> SValueRef { return evaluateNumeric( op, v ); };
+  auto bindNumericOp = []( const std::string& op ) -> CoreFunction {
+    return [ op ]( Environment&, SValue* v ) -> SValue* { return evaluateNumeric( op, v ); };
   };
 
-  e.set( plusSymbol, std::make_shared< SValue >( bindNumericOp( "+" ) ) );
-  e.set( minusSymbol, std::make_shared< SValue >( bindNumericOp( "-" ) ) );
-  e.set( multSymbol, std::make_shared< SValue >( bindNumericOp( "*" ) ) );
-  e.set( divSymbol, std::make_shared< SValue >( bindNumericOp( "/" ) ) );
+  e.set( plusSymbol, SValue( bindNumericOp( "+" ) ) );
+  e.set( minusSymbol, SValue( bindNumericOp( "-" ) ) );
+  e.set( multSymbol, SValue( bindNumericOp( "*" ) ) );
+  e.set( divSymbol, SValue( bindNumericOp( "/" ) ) );
 
-  auto bindListOp = []( auto f ) { return [ f ]( Environment&, SValueRef v ) -> SValueRef { return f( v ); }; };
+  auto bindListOp = []( auto f ) { return [ f ]( Environment&, SValue* v ) -> SValue* { return f( v ); }; };
 
-  e.set( headSymbol, std::make_shared< SValue >( bindListOp( head ) ) );
-  e.set( tailSymbol, std::make_shared< SValue >( bindListOp( tail ) ) );
-  e.set( listSymbol, std::make_shared< SValue >( bindListOp( list ) ) );
-  e.set( joinSymbol, std::make_shared< SValue >( bindListOp( join ) ) );
-
-  e.set( evalSymbol, std::make_shared< SValue >( []( Environment& e, SValueRef v ) -> SValueRef {
-           return evaluate( e, eval( v ) );
-         } ) );
-
-  e.set( defSymbol, std::make_shared< SValue >( evaluateDef ) );
-  e.set( lambdaSymbol, std::make_shared< SValue >( evaluateLambda ) );
+  e.set( headSymbol, SValue( bindListOp( head ) ) );
+  e.set( tailSymbol, SValue( bindListOp( tail ) ) );
+  e.set( listSymbol, SValue( bindListOp( list ) ) );
+  e.set( joinSymbol, SValue( bindListOp( join ) ) );
+  e.set( evalSymbol, SValue( []( Environment& e, SValue* v ) -> SValue* { return evalQexpr( e, v ); } ) );
+  e.set( defSymbol, SValue( evaluateDef ) );
+  e.set( lambdaSymbol, SValue( evaluateLambda ) );
 }
 
-SValueRef evaluate( Environment& e, SValueRef s )
+SValue* evaluate( Environment& e, SValue* v )
 {
   // Symbol
-  if ( auto symLabel = std::get_if< Symbol >( &s->value ) )
+  if ( auto symbol = v->getIf< Symbol >() )
   {
-    return reduce( s, e.get( *symLabel ) );
+    return e.get( *symbol, v );
   }
 
-  if ( s->isType< Sexpr >() )
+  if ( v->isSExpression() )
   {
-    return evaluateSexpr( e, s );
+    return evaluateSexpr( e, v );
   }
 
-  return s;
+  return v;
 }
 
-SValueRef evaluateSexpr( Environment& e, SValueRef s )
+SValue* evaluateSexpr( Environment& e, SValue* s )
 {
-  for ( auto& child : s->children )
-  {
-    reduce( child, evaluate( e, child ) );
-  }
+  s->foreachCell( [ &e ]( SValue& child ) { std::swap( child, *evaluate( e, &child ) ); } );
 
   // Atom.
   if ( s->isEmpty() )
@@ -83,124 +77,170 @@ SValueRef evaluateSexpr( Environment& e, SValueRef s )
     return s;
   }
 
-  // nested superfluous expressions. e.g. ( ( ) )
   if ( s->size() == 1 )
   {
-    return reduce( s, s->children.front() );
+    Cells& cells = s->cellsRequired();
+    std::unique_ptr< SValue > a = cells.takeFront();
+    std::swap( *s, *evaluate( e, a.get() ) );
+    return s;
   }
 
-  if ( auto callable = std::get_if< CoreFunction >( &s->operation().value ) )
+  Cells& cells = s->cellsRequired();
+  std::unique_ptr< SValue > operation = cells.takeFront();
+
+  if ( auto callable = operation->getIf< CoreFunction >() )
   {
     return ( *callable )( e, s );
   }
-  else if ( auto l = std::get_if< Lambda >( &s->operation().value ) )
+  else if ( auto l = operation->getIf< Lambda >() )
   {
     return invokeLambda( *l, e, s );
   }
   else
   {
-    return error( "Operation is not callable", s );
+    return error( s, "Operation is not callable" );
   }
 }
 
-SValueRef invokeLambda( Lambda& l, Environment& e, SValueRef s )
+SValue* invokeLambda( Lambda& l, Environment& e, SValue* s )
 {
-  std::span< SValueRef > sArgs = s->arguments();
-  Cells& formalCells = l.formals->children;
+  Cells& formalCells = l.formals->cellsRequired();
+  Cells& argCells = s->cellsRequired();
 
-  const std::size_t argCount = sArgs.size();
-  const std::size_t formalCount = formalCells.size();
-
-  REQUIRE( s, argCount <= formalCount, "Too many arguments passed to lambda" );
-
-  // Bind all input arguments to respective formal expression.
-  for ( std::size_t i = 0; i < argCount; ++i )
+  // Bind all arguments.
+  while ( !argCells.isEmpty() )
   {
-    const Symbol& sym = std::get< Symbol >( formalCells[ i ]->value );
-    l.env.set( sym, sArgs[ i ] );
+    REQUIRE( s, !formalCells.isEmpty(), "Passed to many arguments to function" );
+
+    std::unique_ptr< SValue > formalArg = formalCells.takeFront();
+
+    const Symbol& sym = formalArg->get< Symbol >();
+
+    // Special case for variadics.
+    if ( sym.label == "&" )
+    {
+      std::unique_ptr< SValue > restOfArgsFormal = formalCells.takeFront();
+      REQUIRE( s, formalCells.isEmpty(), "There should only be 1 symbol after &" );
+
+      // We need to bind last formal to the remaining input arguments as a Q-expression.
+      l.env.set( restOfArgsFormal->get< Symbol >(), *list( s ) );
+      break;
+    }
+
+    std::unique_ptr< SValue > realArg = argCells.takeFront();
+    l.env.set( sym, *realArg );
   }
 
-  // Remove binded formals.
-  formalCells.erase( formalCells.begin(), formalCells.begin() + argCount );
+  // No arguments passed for variadic. e.g. + 1
+  if ( !formalCells.isEmpty() && formalCells.front()->get< Symbol >().label == "&" )
+  {
+    std::unique_ptr< SValue > formalArg = formalCells.takeFront(); // Remove &
 
-  // Do full function application
-  if ( argCount == formalCount )
+    REQUIRE( s, formalCells.size() == 1, "There should only be 1 symbol after &" );
+    std::unique_ptr< SValue > restOfArgsFormal = formalCells.takeFront();
+
+    // Bind the formal to an empty Q-expression.
+    l.env.set( restOfArgsFormal->get< Symbol >(), SValue( QExpr() ) );
+  }
+
+  // Do full function application, every formal argument is now bound.
+  if ( formalCells.isEmpty() )
   {
     l.env.parent = &e;
-    SValueRef wrappedBody = std::make_shared< SValue >( Sexpr() );
-    SValueRef bodyCopy = std::make_shared< SValue >( *l.body );
-    wrappedBody->children.push_back( std::make_shared< SValue >( Symbol( "eval" ) ) );
-    wrappedBody->children.push_back( bodyCopy ); // Add a copy
-    return evaluate( l.env, eval( wrappedBody ) );
+    // Make an S-expression and add a lambda copy for evaluation.
+    // The S-expression is so eval can evaluate it.
+    Cells c;
+    c.append( makeSValue( l.body->value ) );
+    s->value = std::move( c );
+    std::swap( *s, *evalQexpr( l.env, s ) );
+    return s;
   }
 
   else
   {
     // Partial application, return new lambda
     // argCount < formalCount
-    return std::make_shared< SValue >( l );
+    s->value = Lambda( l );
+    return s;
   }
 }
 
-SValueRef evaluateLambda( Environment& e, SValueRef v )
+SValue* evaluateLambda( Environment& e, SValue* v )
 {
-  REQUIRE( v, !v->isEmpty(), "Nothing passed to lambda" );
-  REQUIRE( v, v->argumentCount() == 2, "lambda requires 2 arguments" );
+  REQUIRE( v, v->size() == 2, "lambda requires 2 arguments" );
 
-  std::span< SValueRef > args = v->arguments();
-  SValueRef formals = args.front();
-  SValueRef body = args[ 1 ];
+  Cells& cells = v->cellsRequired();
+  std::unique_ptr< SValue > formals = cells.takeFront();
+  std::unique_ptr< SValue > body = cells.takeFront();
+
   REQUIRE( v, formals->isType< QExpr >(), "First lambda argument must be Q-expression" );
   REQUIRE( v, body->isType< QExpr >(), "Second lambda argument must be Q-expression" );
 
-  const bool allFormalsAreSymbols = std::all_of(
-    formals->children.cbegin(), formals->children.cend(), []( const auto& c ) { return c->isType< Symbol >(); } );
+  Cells& formalCells = formals->cellsRequired();
+  const bool allFormalsAreSymbols =
+    std::all_of( formalCells.begin(), formalCells.end(), []( const auto& c ) { return c->isType< Symbol >(); } );
 
   REQUIRE( v, allFormalsAreSymbols, "Lambda formals can only contains Symbols" );
 
-  v->value = Lambda( Environment(), formals, body );
-  v->children.clear();
+  // Create the lambda.
+  v->value = Lambda( Environment(), std::move( formals ), std::move( body ) );
   return v;
 }
 
-SValueRef evaluateDef( Environment& e, SValueRef v )
+SValue* evaluateDef( Environment& e, SValue* v )
 {
-  REQUIRE( v, !v->isEmpty(), "Nothing passed to def" );
-  REQUIRE( v, v->argumentCount() >= 2, "def requires 2 or more arguments" );
+  REQUIRE( v, v->size() >= 2, "def requires 2 or more arguments" );
+
+  Cells& cells = v->cellsRequired();
 
   // def { x y }   10 20
   //      symbols  expressions
-  // x = 10, y = 20
-  std::span< SValueRef > args = v->arguments();
-  SValueRef symbols = args.front();
-  std::span< SValueRef > expressions{ std::next( args.begin() ), args.end() };
+  // where it will bind: x = 10, y = 20
 
-  REQUIRE( v, symbols->isType< QExpr >(), "def must take a Q-expression for the first argument" );
-  REQUIRE( v, !symbols->isEmpty(), "def requires a non-empty Q-expression for first argument" );
-  REQUIRE( v, symbols->size() == expressions.size(), "Symbol count must match expression count" );
+  std::unique_ptr< SValue > symbols = cells.takeFront();
+  Cells& symbolCells = symbols->cellsRequired();
 
-  const bool allSymbolsAreSymbolType = std::all_of(
-    symbols->children.cbegin(), symbols->children.cend(), []( const auto& c ) { return c->isType< Symbol >(); } );
+  REQUIRE( v, symbols->isQExpression(), "def must take a Q-expression for the first argument" );
+  REQUIRE( v, !symbolCells.isEmpty(), "def requires a non-empty Q-expression for first argument" );
+  REQUIRE( v, symbolCells.size() == cells.size(), "Symbol count must match expression count" );
+
+  const bool allSymbolsAreSymbolType =
+    std::all_of( symbolCells.begin(), symbolCells.end(), []( const auto& c ) { return c->isType< Symbol >(); } );
 
   REQUIRE( v, allSymbolsAreSymbolType, "Cannot define for non-symbol type" );
 
-  for ( std::size_t i = 0; i < symbols->size(); ++i )
+  for ( std::size_t i = 0; i < symbolCells.size(); ++i )
   {
-    e.rootSet( std::get< Symbol >( symbols->children[ i ]->value ), expressions[ i ] );
+    e.rootSet( symbolCells[ i ]->get< Symbol >(), *cells[ i ] );
   }
 
-  v->value = Sexpr();
-  v->children.clear();
-  return v;
+  return empty( v );
 }
 
-SValueRef evaluateNumeric( const std::string& op, SValueRef v )
+SValue* evaluateNumeric( const std::string& op, SValue* v )
 {
-  if ( v->arguments().front()->isType< int >() )
+  Cells& cells = v->cellsRequired();
+  if ( cells.front()->isType< int >() )
   {
     return evaluateNumericT< int >( op, v );
   }
 
   // Fall back to float.
   return evaluateNumericT< double >( op, v );
+}
+
+/// @brief Evaluate the Q-expression as an S-expression.
+SValue* evalQexpr( Environment& e, SValue* v )
+{
+  Cells& args = v->cellsRequired();
+  REQUIRE( v, args.size() == 1, "eval requires 1 argument" );
+
+  SValue* qexpr = args.front();
+  REQUIRE( v, qexpr->isQExpression(), "eval expects a QExpression" );
+
+  Cells& qexprCells = qexpr->cellsRequired();
+
+  // Move the Q-expression cells into an S-expression.
+  v->value = Cells{ std::move( qexprCells ) };
+  return evaluate( e, v );
 }

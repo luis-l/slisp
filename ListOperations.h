@@ -1,18 +1,17 @@
 #pragma once
 
-#include "SValueRef.h"
+#include <memory>
+
+class SValue;
 
 /// @brief Take a Q-expression and return the Q-expression with only its first child.
-SValueRef head( SValueRef v );
+SValue* head( SValue* v );
 
 /// @brief Take a Q-expression and return Q-expression without its first child.
-SValueRef tail( SValueRef v );
+SValue* tail( SValue* v );
 
 /// @brief Converts an S-expression to a Q-expression.
-SValueRef list( SValueRef v );
-
-/// @brief Evaluate the Q-expression as an S-expression.
-SValueRef eval( SValueRef v );
+SValue* list( SValue* v );
 
 /// @brief Concatenates multiple Q-expressions.
-SValueRef join( SValueRef v );
+SValue* join( SValue* v );

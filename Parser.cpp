@@ -77,7 +77,7 @@ std::vector< std::string > lineSplitter( const std::string& line )
 }
 
 template < typename IteratorT >
-SValueRef parse( IteratorT begin, IteratorT end )
+std::unique_ptr< SValue > parse( IteratorT begin, IteratorT end )
 {
   const std::string validSymbolics = "_+-*\\/=<>!&";
 
@@ -90,8 +90,28 @@ SValueRef parse( IteratorT begin, IteratorT end )
 
   auto it = begin;
 
-  std::stack< SValueRef > traversal;
-  traversal.push( std::make_shared< SValue >( Sexpr() ) ); // Represents program
+  // Root for the entire program
+  std::unique_ptr< SValue > root = makeDefaultSValue();
+
+  std::stack< SValue* > traversal;
+  traversal.push( root.get() );
+
+  auto appendCellOnly = [ &traversal ]( auto&& value ) -> SValue* {
+    SValue* parent = traversal.top();
+    Cells& cells = parent->cellsRequired();
+    cells.append( makeSValue( std::forward< decltype( value ) >( value ) ) );
+    return cells.back();
+  };
+
+  auto appendAndTraverseCell = [ &traversal, &appendCellOnly ]( auto&& value ) {
+    traversal.push( appendCellOnly( std::forward< decltype( value ) >( value ) ) );
+  };
+
+  auto popCell = [ &traversal ]() -> SValue* {
+    SValue* s = traversal.top();
+    traversal.pop();
+    return s;
+  };
 
   while ( it != end )
   {
@@ -104,12 +124,12 @@ SValueRef parse( IteratorT begin, IteratorT end )
       const unsigned char c = *it;
       if ( c == '(' )
       {
-        traversal.push( std::make_shared< SValue >( Sexpr() ) );
+        appendAndTraverseCell( Cells() );
       }
 
       else if ( c == '{' )
       {
-        traversal.push( std::make_shared< SValue >( QExpr() ) );
+        appendAndTraverseCell( QExpr() );
       }
 
       else if ( isValidSymbol( c ) )
@@ -121,14 +141,10 @@ SValueRef parse( IteratorT begin, IteratorT end )
         std::copy( it, contentEnd, std::back_inserter( line ) );
         it = contentEnd;
 
-        auto& parent = traversal.top();
-
         const auto splits = lineSplitter( line );
-
         for ( const std::string& s : lineSplitter( line ) )
         {
-          auto child = std::make_shared< SValue >( readValue( s ) );
-          parent->children.push_back( child );
+          appendCellOnly( readValue( s ) );
         }
 
         continue;
@@ -136,31 +152,19 @@ SValueRef parse( IteratorT begin, IteratorT end )
 
       else if ( c == '}' )
       {
-        std::shared_ptr< SValue > top = traversal.top();
-        traversal.pop();
-
-        if ( !traversal.empty() )
+        SValue* s = popCell();
+        if ( traversal.empty() && !s->isQExpression() )
         {
-          traversal.top()->children.push_back( top );
-        }
-        else if ( !std::get_if< QExpr >( &top->value ) )
-        {
-          throw std::runtime_error( "Mismatch qexpr closing brace" );
+          throw std::runtime_error( "Mismatch Q-expression closing brace" );
         }
       }
 
       else if ( c == ')' )
       {
-        std::shared_ptr< SValue > top = traversal.top();
-        traversal.pop();
-
-        if ( !traversal.empty() )
+        SValue* s = popCell();
+        if ( traversal.empty() && !s->isSExpression() )
         {
-          traversal.top()->children.push_back( top );
-        }
-        else if ( !std::get_if< Sexpr >( &top->value ) )
-        {
-          throw std::runtime_error( "Mismatched closing parens" );
+          throw std::runtime_error( "Mismatch S-expression closing brace" );
         }
       }
 
@@ -170,16 +174,15 @@ SValueRef parse( IteratorT begin, IteratorT end )
 
   if ( traversal.size() != 1 ) // Only Program node should exist at the end.
   {
-    throw std::runtime_error( "Mismatched parens" );
+    throw std::runtime_error( "Mismatched parentheses" );
   }
 
-  auto r = traversal.top();
-  traversal.pop();
-  return r;
+  popCell();
+  return root;
 }
 
 using stringIt = std::string::iterator;
-template std::shared_ptr< SValue > parse< stringIt >( stringIt, stringIt );
+template std::unique_ptr< SValue > parse< stringIt >( stringIt, stringIt );
 
 using stringConstIt = std::string::const_iterator;
-template std::shared_ptr< SValue > parse< stringConstIt >( stringConstIt, stringConstIt );
+template std::unique_ptr< SValue > parse< stringConstIt >( stringConstIt, stringConstIt );

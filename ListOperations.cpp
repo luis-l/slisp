@@ -1,89 +1,83 @@
 
 #include "ListOperations.h"
+#include "Evaluator.h"
 
 #include "SValue.h"
 
 #include <algorithm>
-#include <numeric>
 
-// v is an S-expression. e.g. (op qexpr)
-SValueRef head( SValueRef v )
+// v is an expression containing { 1 2 3 }
+SValue* head( SValue* v )
 {
-  REQUIRE( v, !v->isEmpty(), "Nothing passed to head" );
-  REQUIRE( v, v->argumentCount() == 1, "head only takes 1 argument" );
+  Cells& args = v->cellsRequired();
+  REQUIRE( v, args.size() == 1, "head requires 1 argument" );
 
-  SValueRef qexpr = v->arguments().front();
+  SValue* qexpr = args.front();
+  REQUIRE( v, qexpr->isQExpression(), "head expects a QExpression" );
+  REQUIRE( v, !qexpr->isEmpty(), "head expects a non-empty QExpression" );
 
-  REQUIRE( v, qexpr->isType< QExpr >(), "head must take a Q-expression" );
-  REQUIRE( v, !qexpr->isEmpty(), "head requires a non-empty Q-expression" );
+  Cells& qexprCells = qexpr->cellsRequired();
 
   // Take the front only for the Q-expression children.
-  qexpr->children.erase( qexpr->children.begin() + 1, qexpr->children.end() );
-  return reduce( v, qexpr );
+  qexprCells.drop( qexprCells.begin() + 1, qexprCells.end() );
+
+  // V becomes Q-expression.
+  std::swap( *v, *qexpr );
+  return v;
 }
 
-SValueRef tail( SValueRef v )
+// v is an expression containing { 1 2 3 }
+SValue* tail( SValue* v )
 {
-  REQUIRE( v, !v->isEmpty(), "Nothing passed to tail" );
-  REQUIRE( v, v->argumentCount() == 1, "tail only takes 1 argument" );
+  Cells& args = v->cellsRequired();
+  REQUIRE( v, args.size() == 1, "tail requires 1 argument" );
 
-  SValueRef qexpr = v->arguments().front();
+  SValue* qexpr = args.front();
+  REQUIRE( v, qexpr->isQExpression(), "tail expects a QExpression" );
 
-  REQUIRE( v, qexpr->isType< QExpr >(), "tail must take a Q-expression" );
-  REQUIRE( v, !qexpr->isEmpty(), "tail requires a non-empty Q-expression" );
+  Cells& qexprCells = qexpr->cellsRequired();
 
   // Remove the front.
-  qexpr->children.erase( qexpr->children.begin() );
-  return reduce( v, qexpr );
-  //return qexpr;
-}
+  qexprCells.drop( qexprCells.begin() );
 
-SValueRef list( SValueRef v )
-{
-  v->value = QExpr();
-  v->children.erase( v->children.begin() ); // Drop the operation "list". Keep args.
+  // V becomes Q-expression.
+  std::swap( *v, *qexpr );
   return v;
 }
 
-SValueRef eval( SValueRef v )
+SValue* list( SValue* v )
 {
-  REQUIRE( v, v->argumentCount() == 1, "eval must take 1 argument" );
-
-  std::span< SValueRef > args = v->arguments();
-  SValueRef arg = args.front();
-
-  REQUIRE( v, arg->isType< QExpr >(), "eval must take a Q-expression" );
-  v->value = Sexpr();
-  v->children = std::move( arg->children ); // Take Q-expression children as S-expression children.
+  REQUIRE( v, v->isSExpression(), "list expects an S-expression" );
+  v->value = QExpr{ std::move( v->cellsRequired() ) }; // Move the S-expression cells into a Q-expression.
   return v;
 }
 
-// v is an s-expression containing "join qexpr qexpr ... "
+// v is an s-expression containing "qexpr qexpr ... "
 // sexpr
-//   join
 //   qexpr
 //   qexpr
-SValueRef join( SValueRef v )
+SValue* join( SValue* v )
 {
-  REQUIRE( v, v->argumentCount() > 0, "join needs at least 1 argument" );
-
-  auto args = v->arguments();
+  Cells& cells = v->cellsRequired();
 
   const bool allQexprs =
-    std::all_of( args.begin(), args.end(), []( const auto& child ) { return child->isType< QExpr >(); } );
+    std::all_of( cells.begin(), cells.end(), []( const auto& child ) { return child->isQExpression(); } );
 
   REQUIRE( v, allQexprs, "join must take Q-expressions" );
 
-  SValueRef concat = args.front();
+  std::unique_ptr< SValue > joined = cells.takeFront();
+  Cells& joinedCells = joined->cellsRequired();
 
-  std::for_each( std::next( args.begin() ), args.end(), [ concat ]( auto& child ) {
-    concat->children.insert(
-      concat->children.end(),
-      std::make_move_iterator( child->children.begin() ),
-      std::make_move_iterator( child->children.end() ) );
-
-    child->children.clear();
+  // Join rest of the cells.
+  std::for_each( cells.begin(), cells.end(), [ &joinedCells ]( auto& child ) {
+    Cells& otherCells = child->cellsRequired();
+    while ( !otherCells.isEmpty() )
+    {
+      joinedCells.append( otherCells.takeFront() );
+    }
   } );
 
-  return reduce( v, concat );
+  // v now becomes a Q-expression.
+  std::swap( *v, *joined );
+  return v;
 }

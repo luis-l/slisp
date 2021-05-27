@@ -15,3 +15,6 @@ SValue* list( SValue* v );
 
 /// @brief Concatenates multiple Q-expressions.
 SValue* join( SValue* v );
+
+/// @brief Gets the length of the Q-expression.
+SValue* length( SValue* v );

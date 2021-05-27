@@ -88,3 +88,16 @@ SValue* join( SValue* v )
   std::swap( *v, *joined );
   return v;
 }
+
+SValue* length( SValue* v )
+{
+  Cells& args = v->cellsRequired();
+  REQUIRE( v, args.size() == 1, "length requires 1 argument" );
+
+  SValue* qexpr = args.front();
+  REQUIRE( v, qexpr->isQExpression(), "length expects a QExpression" );
+
+  Cells& qexprCells = qexpr->cellsRequired();
+  v->value = static_cast< int >( qexprCells.size() );
+  return v;
+}

@@ -15,6 +15,8 @@ const std::regex floatRegex( "-?[0-9]+[.][0-9]+" );
 const std::regex stringLiteralRegex( R"("(\\.|[^"])*")" );
 //const std::regex stringLiteralRegex( "\"(\\\\.|[^\"])*\"" );
 
+const std::regex commentRegex( R"(;[^\r\n]*)" );
+
 bool isBool( const std::string& s )
 {
   return s == "true" || s == "false";
@@ -123,7 +125,7 @@ std::unique_ptr< SValue > parse( IteratorT begin, IteratorT end )
   while ( it != end )
   {
     it = std::find_if( it, end, [ isValidSymbol, isParen, isBraces ]( unsigned char c ) {
-      return isParen( c ) || isBraces( c ) || isValidSymbol( c ) || c == '"';
+      return isParen( c ) || isBraces( c ) || isValidSymbol( c ) || c == '"' || c == ';';
     } );
 
     if ( it != end )
@@ -146,6 +148,17 @@ std::unique_ptr< SValue > parse( IteratorT begin, IteratorT end )
         }
       }
 
+      // Begin comment. Lower precedence than quotes.
+      else if ( c == ';' )
+      {
+        std::match_results< IteratorT > stringMatch;
+        if ( std::regex_search( it, end, stringMatch, commentRegex ) )
+        {
+          it += stringMatch.length();
+          continue;
+        }
+      }
+
       else if ( c == '(' )
       {
         appendAndTraverseCell( Cells() );
@@ -158,8 +171,8 @@ std::unique_ptr< SValue > parse( IteratorT begin, IteratorT end )
 
       else if ( isValidSymbol( c ) )
       {
-        auto contentEnd =
-          std::find_if( it, end, [ isParen, isBraces ]( unsigned char c ) { return isParen( c ) || isBraces( c ); } );
+        auto contentEnd = std::find_if(
+          it, end, [ isParen, isBraces ]( unsigned char c ) { return isParen( c ) || isBraces( c ) || c == ';'; } );
 
         std::string line;
         std::copy( it, contentEnd, std::back_inserter( line ) );

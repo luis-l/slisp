@@ -30,12 +30,6 @@ bool isFloat( const std::string& s )
   return std::regex_match( s, floatRegex );
 }
 
-// String literals is quoted text.
-bool isStringLiteral( const std::string& s )
-{
-  return std::regex_match( s, stringLiteralRegex );
-}
-
 Value readValue( const std::string& text )
 {
   if ( isBool( text ) )
@@ -136,21 +130,14 @@ std::unique_ptr< SValue > parse( IteratorT begin, IteratorT end )
     {
       const unsigned char c = *it;
 
-      // begin String literal
+      // Begin String literal
       if ( c == '"' )
       {
-        std::smatch stringMatch;
-
-        // regex search does not like temporary strings. Cannot seemd to get iterators to work with it.
-        std::string text( begin, end );
-
-        const bool stringFound = std::regex_search( text, stringMatch, stringLiteralRegex );
-        if ( stringFound )
+        std::match_results< IteratorT > stringMatch;
+        if ( std::regex_search( it, end, stringMatch, stringLiteralRegex ) )
         {
-          const std::string stringText = stringMatch.str();
-          appendCellOnly( stringText );
-          const auto offset = stringMatch.position() + stringMatch.length();
-          it += offset;
+          appendCellOnly( stringMatch.str() );
+          it += stringMatch.length();
           continue;
         }
         else

@@ -5,12 +5,31 @@
 #include "SValue.h"
 #include "Utility.h"
 
+#include <filesystem>
 #include <iostream>
 
-Environment createDefaultEnvironment()
+void loadStandardLibrary( Environment& e, std::ostream& out )
+{
+  for ( const auto& dir : std::filesystem::recursive_directory_iterator( "standard" ) )
+  {
+    if ( dir.is_regular_file() && dir.path().extension() == ".slisp" )
+    {
+      auto root = makeDefaultSValue();
+      root->cells()->append( makeSValue( dir.path().string() ) );
+      SValue* result = evalLoad( e, root.get() );
+      if ( result->isError() )
+      {
+        out << *result << '\n';
+      }
+    }
+  }
+}
+
+Environment createDefaultEnvironment( std::ostream& out )
 {
   Environment env;
   addCoreFunctions( env );
+  loadStandardLibrary( env, out );
   return env;
 }
 
@@ -19,19 +38,9 @@ class InteractiveEvaluator
 public:
   void runInteractiveMode()
   {
-    Environment globalEnv = createDefaultEnvironment();
-
-    {
-      auto root = makeDefaultSValue();
-      root->cells()->append( makeSValue( "standard/Standard.slisp" ) );
-      SValue* result = evalLoad( globalEnv, root.get() );
-      if ( result->isError() )
-      {
-        out << *result << '\n';
-      }
-    }
-
     out << std::boolalpha;
+
+    Environment globalEnv = createDefaultEnvironment( out );
 
     bool isDone = false;
     while ( !isDone )
@@ -47,6 +56,7 @@ public:
       }
       else if ( input == "env" )
       {
+        // Special command to show the environment.
         out << globalEnv << '\n';
       }
       else
@@ -77,7 +87,7 @@ int main( int argc, char** argv )
 {
   if ( argc >= 2 )
   {
-    Environment globalEnv = createDefaultEnvironment();
+    Environment globalEnv = createDefaultEnvironment( std::cout );
 
     const std::string filename( argv[ 1 ] );
     auto root = makeDefaultSValue();

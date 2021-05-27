@@ -2,9 +2,13 @@
 #include "Parser.h"
 #include "SValue.h"
 
+#include <optional>
 #include <regex>
 #include <stack>
 #include <string>
+
+//const std::regex symbolRegex( "[a-zA-Z0-9_+\\-*\\/\\\\=<>!&]+" );
+const std::regex symbolRegex( R"([a-zA-Z0-9_+\-*\/\\=<>!&]+)" );
 
 const std::regex integerRegex( "-?[0-9]+" );
 
@@ -16,6 +20,23 @@ const std::regex stringLiteralRegex( R"("(\\.|[^"])*")" );
 //const std::regex stringLiteralRegex( "\"(\\\\.|[^\"])*\"" );
 
 const std::regex commentRegex( R"(;[^\r\n]*)" );
+
+enum class RegexType
+{
+
+  Symbol,
+  Integer,
+  Float,
+  StringLiteral,
+  Comment
+};
+
+const std::vector< std::pair< RegexType, std::regex > > regexes{
+  { RegexType::StringLiteral, stringLiteralRegex },
+  { RegexType::Integer, integerRegex },
+  { RegexType::Float, floatRegex },
+  { RegexType::Symbol, symbolRegex },
+  { RegexType::Comment, commentRegex } };
 
 bool isBool( const std::string& s )
 {
@@ -32,6 +53,11 @@ bool isFloat( const std::string& s )
   return std::regex_match( s, floatRegex );
 }
 
+bool isStringLiteral( const std::string& s )
+{
+  return std::regex_match( s, stringLiteralRegex );
+}
+
 Value readValue( const std::string& text )
 {
   if ( isBool( text ) )
@@ -45,6 +71,10 @@ Value readValue( const std::string& text )
   else if ( isFloat( text ) )
   {
     return std::stod( text );
+  }
+  else if ( isStringLiteral( text ) )
+  {
+    return text;
   }
   else
   {
@@ -124,32 +154,15 @@ std::unique_ptr< SValue > parse( IteratorT begin, IteratorT end )
 
   while ( it != end )
   {
-    it = std::find_if( it, end, [ isValidSymbol, isParen, isBraces ]( unsigned char c ) {
-      return isParen( c ) || isBraces( c ) || isValidSymbol( c ) || c == '"' || c == ';';
-    } );
+    // Skip all whitespace.
+    it = std::find_if_not( it, end, []( unsigned char c ) { return std::isspace( c ); } );
 
     if ( it != end )
     {
       const unsigned char c = *it;
 
-      // Begin String literal
-      if ( c == '"' )
-      {
-        std::match_results< IteratorT > stringMatch;
-        if ( std::regex_search( it, end, stringMatch, stringLiteralRegex ) )
-        {
-          appendCellOnly( stringMatch.str() );
-          it += stringMatch.length();
-          continue;
-        }
-        else
-        {
-          throw std::runtime_error( "Missing string literal quote" );
-        }
-      }
-
-      // Begin comment. Lower precedence than quotes.
-      else if ( c == ';' )
+      // Begin comment.
+      if ( c == ';' )
       {
         std::match_results< IteratorT > stringMatch;
         if ( std::regex_search( it, end, stringMatch, commentRegex ) )
@@ -159,7 +172,7 @@ std::unique_ptr< SValue > parse( IteratorT begin, IteratorT end )
         }
       }
 
-      else if ( c == '(' )
+      if ( c == '(' )
       {
         appendAndTraverseCell( Cells() );
       }
@@ -167,24 +180,6 @@ std::unique_ptr< SValue > parse( IteratorT begin, IteratorT end )
       else if ( c == '{' )
       {
         appendAndTraverseCell( QExpr() );
-      }
-
-      else if ( isValidSymbol( c ) )
-      {
-        auto contentEnd = std::find_if(
-          it, end, [ isParen, isBraces ]( unsigned char c ) { return isParen( c ) || isBraces( c ) || c == ';'; } );
-
-        std::string line;
-        std::copy( it, contentEnd, std::back_inserter( line ) );
-        it = contentEnd;
-
-        const auto splits = lineSplitter( line );
-        for ( const std::string& s : lineSplitter( line ) )
-        {
-          appendCellOnly( readValue( s ) );
-        }
-
-        continue;
       }
 
       else if ( c == '}' )
@@ -202,6 +197,36 @@ std::unique_ptr< SValue > parse( IteratorT begin, IteratorT end )
         if ( traversal.empty() && !s->isSExpression() )
         {
           throw std::runtime_error( "Mismatch S-expression closing brace" );
+        }
+      }
+
+      // Try to match numerics, symbols, comments, or string literals.
+      else
+      {
+        //auto contentEnd = std::find_if(
+        //  it, end, [ isParen, isBraces ]( unsigned char c ) { return isParen( c ) || isBraces( c ) || c == ';'; } );
+
+        // Get the best matching regex. Ignores comments.
+        using MatchResult = std::pair< std::size_t, std::string >;
+        auto findMatch = []( IteratorT ibegin, IteratorT iend ) -> std::optional< MatchResult > {
+          auto flags = std::regex_constants::match_default | std::regex_constants::match_continuous;
+          for ( const auto& [ type, regex ] : regexes )
+          {
+            std::match_results< IteratorT > match;
+            if ( std::regex_search( ibegin, iend, match, regex, flags ) && type != RegexType::Comment )
+            {
+              return MatchResult{ match.length(), match.str() };
+            }
+          }
+          return std::nullopt;
+        };
+
+        if ( std::optional< MatchResult > result = findMatch( it, end ) )
+        {
+          auto [ size, token ] = *result;
+          appendCellOnly( readValue( std::move( token ) ) );
+          it += size;
+          continue;
         }
       }
 

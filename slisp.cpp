@@ -40,7 +40,7 @@ public:
   {
     out << std::boolalpha;
 
-    Environment globalEnv = createDefaultEnvironment( out );
+    Environment env = createDefaultEnvironment( out );
 
     bool isDone = false;
     while ( !isDone )
@@ -57,7 +57,7 @@ public:
       else if ( input == "env" )
       {
         // Special command to show the environment.
-        out << globalEnv << '\n';
+        out << env << '\n';
       }
       else
       {
@@ -67,7 +67,7 @@ public:
           out << "ast: ";
           show( out, *root ) << '\n';
 
-          auto result = evaluate( globalEnv, root.get() );
+          auto result = evaluate( env, root.get() );
           out << "==> ";
           show( out, *result ) << "\n\n";
         }
@@ -87,13 +87,13 @@ int main( int argc, char** argv )
 {
   if ( argc >= 2 )
   {
-    Environment globalEnv = createDefaultEnvironment( std::cout );
+    Environment env = createDefaultEnvironment( std::cout );
 
     const std::string filename( argv[ 1 ] );
     auto root = makeDefaultSValue();
     root->cells()->append( makeSValue( filename ) );
 
-    SValue* result = evalLoad( globalEnv, root.get() );
+    SValue* result = evalLoad( env, root.get() );
     std::cout << *result << '\n';
   }
   else

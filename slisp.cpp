@@ -87,14 +87,23 @@ int main( int argc, char** argv )
 {
   if ( argc >= 2 )
   {
+    std::cout << "Reading script...\n";
     Environment env = createDefaultEnvironment( std::cout );
 
     const std::string filename( argv[ 1 ] );
     auto root = makeDefaultSValue();
     root->cells()->append( makeSValue( filename ) );
 
-    SValue* result = evalLoad( env, root.get() );
-    std::cout << *result << '\n';
+    try
+    {
+      SValue* result = evalLoad( env, root.get() );
+      show( std::cout, *result ) << '\n';
+      std::cout << "Done...\n";
+    }
+    catch ( const std::exception& e )
+    {
+      std::cout << e.what() << '\n';
+    }
   }
   else
   {

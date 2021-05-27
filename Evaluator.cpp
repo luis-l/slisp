@@ -62,6 +62,7 @@ void addCoreFunctions( Environment& e )
   e.set( minusSymbol, SValue( bindNumericOp( "-" ) ) );
   e.set( multSymbol, SValue( bindNumericOp( "*" ) ) );
   e.set( divSymbol, SValue( bindNumericOp( "/" ) ) );
+  e.set( Symbol( "mod" ), SValue( bindNumericOp( "mod" ) ) );
 
   auto bindListOp = []( auto f ) { return [ f ]( Environment&, SValue* v ) -> SValue* { return f( v ); }; };
 
@@ -141,12 +142,12 @@ SValue* evaluateSexpr( Environment& e, SValue* s )
   {
     return invokeLambda( *l, e, s );
   }
-  else if ( operation->isSExpression() && operation->isEmpty() )
-  { // Ignore Empty S-expression
-    // Special case feature. Allow multiple definitions within an S-expression.
-    // e.g.  (def {a} 10) (def {b} 20 ) ( def {c} 30 ) ==> ()
-    return evaluate( e, s ); // Evaluate the rest
-  }
+  //else if ( operation->isSExpression() && operation->isEmpty() )
+  //{ // Ignore Empty S-expression
+  //  // Special case feature. Allow multiple definitions within an S-expression.
+  //  // e.g.  (def {a} 10) (def {b} 20 ) ( def {c} 30 ) ==> ()
+  //  return evaluate( e, s ); // Evaluate the rest
+  //}
   else
   {
     return error( s, "Operation is not callable" );

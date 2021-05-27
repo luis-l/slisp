@@ -31,12 +31,16 @@ enum class RegexType
   Comment
 };
 
+// Regex order matters.
+// Try comments first for early ignore.
+// Try float before int. If int is first, then 10.0 will parse as '10' '0' tokens
+// Finally try string literals and symbols.
 const std::vector< std::pair< RegexType, std::regex > > regexes{
-  { RegexType::StringLiteral, stringLiteralRegex },
-  { RegexType::Integer, integerRegex },
+  { RegexType::Comment, commentRegex },
   { RegexType::Float, floatRegex },
-  { RegexType::Symbol, symbolRegex },
-  { RegexType::Comment, commentRegex } };
+  { RegexType::Integer, integerRegex },
+  { RegexType::StringLiteral, stringLiteralRegex },
+  { RegexType::Symbol, symbolRegex } };
 
 bool isBool( const std::string& s )
 {

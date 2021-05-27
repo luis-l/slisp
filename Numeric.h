@@ -76,6 +76,24 @@ SValue* evaluateNumericT( const std::string& op, SValue* v )
         return y == 0 ? Value( Error( "Division by zero" ) ) : Value( x / y );
       };
     }
+    if ( op == "mod" )
+    {
+      return []( NumericT x, NumericT y ) -> Value {
+        if ( y == NumericT{ 0 } )
+        {
+          return Value( Error( "Modulus division by zero" ) );
+        }
+        if constexpr ( std::is_integral_v< NumericT > )
+        {
+          return Value( x % y );
+        }
+        else
+        {
+          // Fall back to float mod.
+          return std::fmod< double >( x, y );
+        }
+      };
+    }
     return []( NumericT x, NumericT y ) -> Value { return Error( "Unsupported numerical operator" ); };
   };
 

@@ -11,11 +11,16 @@
 SValue* evaluateSexpr( Environment& e, SValue* s );
 SValue* evaluateNumeric( const std::string& op, SValue* v );
 SValue* evaluateDef( Environment& e, SValue* v );
+SValue* evaluateAssign( Environment& e, SValue* v );
 SValue* evaluateLambda( Environment& e, SValue* v );
 SValue* invokeLambda( Lambda&, Environment& e, SValue* v );
 SValue* evalQexpr( Environment& e, SValue* v );
 
 SValue* evalConditional( Environment& e, SValue* v );
+
+SValue* evalConjunction( Environment& e, SValue* v );
+SValue* evalDisjunction( Environment& e, SValue* v );
+SValue* evalNegation( Environment& e, SValue* v );
 
 const Symbol plusSymbol( "+" );
 const Symbol minusSymbol( "-" );
@@ -29,6 +34,7 @@ const Symbol joinSymbol( "join" );
 const Symbol evalSymbol( "eval" );
 
 const Symbol defSymbol( "def" );
+const Symbol assignSymbol( "=" );
 const Symbol lambdaSymbol( "\\" );
 
 const Symbol lesserSymbol( "<" );
@@ -63,8 +69,11 @@ void addCoreFunctions( Environment& e )
   e.set( tailSymbol, SValue( bindListOp( tail ) ) );
   e.set( listSymbol, SValue( bindListOp( list ) ) );
   e.set( joinSymbol, SValue( bindListOp( join ) ) );
+  e.set( Symbol( "len" ), SValue( bindListOp( length ) ) );
+
   e.set( evalSymbol, SValue( []( Environment& e, SValue* v ) -> SValue* { return evalQexpr( e, v ); } ) );
   e.set( defSymbol, SValue( evaluateDef ) );
+  e.set( assignSymbol, SValue( evaluateAssign ) );
   e.set( lambdaSymbol, SValue( evaluateLambda ) );
 
   e.set( lesserSymbol, SValue( evalLesser ) );
@@ -77,6 +86,10 @@ void addCoreFunctions( Environment& e )
   e.set( notEqualSymbol, SValue( evalNotEqual ) );
 
   e.set( conditionalSymbol, SValue( evalConditional ) );
+
+  e.set( Symbol( "and" ), SValue( evalConjunction ) );
+  e.set( Symbol( "or" ), SValue( evalDisjunction ) );
+  e.set( Symbol( "not" ), SValue( evalNegation ) );
 
   e.set( loadSymbol, SValue( evalLoad ) );
   e.set( printSymbol, SValue( evalPrint ) );
@@ -255,6 +268,37 @@ SValue* evaluateDef( Environment& e, SValue* v )
   return empty( v );
 }
 
+// Same as def but uses local environment.
+SValue* evaluateAssign( Environment& e, SValue* v )
+{
+  REQUIRE( v, v->size() >= 2, "= requires 2 or more arguments" );
+
+  Cells& cells = v->cellsRequired();
+
+  // = { x y }   10 20
+  //      symbols  expressions
+  // where it will bind: x = 10, y = 20
+
+  std::unique_ptr< SValue > symbols = cells.takeFront();
+  Cells& symbolCells = symbols->cellsRequired();
+
+  REQUIRE( v, symbols->isQExpression(), "= must take a Q-expression for the first argument" );
+  REQUIRE( v, !symbolCells.isEmpty(), "= requires a non-empty Q-expression for first argument" );
+  REQUIRE( v, symbolCells.size() == cells.size(), "Symbol count must match expression count" );
+
+  const bool allSymbolsAreSymbolType =
+    std::all_of( symbolCells.begin(), symbolCells.end(), []( const auto& c ) { return c->isType< Symbol >(); } );
+
+  REQUIRE( v, allSymbolsAreSymbolType, "Cannot define for non-symbol type" );
+
+  for ( std::size_t i = 0; i < symbolCells.size(); ++i )
+  {
+    e.set( symbolCells[ i ]->get< Symbol >(), *cells[ i ] );
+  }
+
+  return empty( v );
+}
+
 SValue* evaluateNumeric( const std::string& op, SValue* v )
 {
   Cells& cells = v->cellsRequired();
@@ -307,4 +351,49 @@ SValue* evalConditional( Environment& e, SValue* v )
     v->value = Cells( std::move( second->cellsRequired() ) );
     return evaluate( e, v );
   }
+}
+
+// Logical AND
+SValue* evalConjunction( Environment& e, SValue* v )
+{
+  Cells& cells = v->cellsRequired();
+  const bool allBooleans =
+    std::all_of( cells.cbegin(), cells.cend(), []( const auto& s ) { return s->isType< Boolean >(); } );
+
+  REQUIRE( v, allBooleans, "and expects booleans" );
+
+  const bool result = std::all_of(
+    cells.cbegin(), cells.cend(), []( const auto& s ) { return s->get< Boolean >() == Boolean::True ? true : false; } );
+
+  v->value = result ? Boolean::True : Boolean::False;
+  return v;
+}
+
+// Logical OR
+SValue* evalDisjunction( Environment& e, SValue* v )
+{
+  Cells& cells = v->cellsRequired();
+  const bool allBooleans =
+    std::all_of( cells.cbegin(), cells.cend(), []( const auto& s ) { return s->isType< Boolean >(); } );
+
+  REQUIRE( v, allBooleans, "or expects booleans" );
+
+  const bool result = std::any_of(
+    cells.cbegin(), cells.cend(), []( const auto& s ) { return s->get< Boolean >() == Boolean::True ? true : false; } );
+
+  v->value = result ? Boolean::True : Boolean::False;
+  return v;
+}
+
+// Logical NOT
+SValue* evalNegation( Environment& e, SValue* v )
+{
+  REQUIRE( v, v->size() == 1, "not expects one argument" );
+
+  Cells& cells = v->cellsRequired();
+  SValue* s = cells.front();
+  REQUIRE( v, s->isType< Boolean >(), "not expects a boolean" );
+
+  v->value = s->get< Boolean >() == Boolean::True ? Boolean::False : Boolean::True;
+  return v;
 }

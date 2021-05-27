@@ -7,6 +7,7 @@
 
 #include <fstream>
 #include <iostream>
+#include <sstream>
 
 // v contains the string path
 SValue* evalLoad( Environment& e, SValue* v )
@@ -30,9 +31,15 @@ SValue* evalLoad( Environment& e, SValue* v )
   while ( !scriptExpressions.isEmpty() )
   {
     std::unique_ptr< SValue > v = scriptExpressions.takeFront();
+
+    std::ostringstream ss;
+    show( ss, *v );
+    std::string exprString = ss.str();
+
     SValue* result = evaluate( e, v.get() );
     if ( result->isError() )
     {
+      std::cout << exprString << '\n';
       std::cout << *result << '\n';
     }
   }

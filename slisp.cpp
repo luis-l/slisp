@@ -3,16 +3,33 @@
 #include "Evaluator.h"
 #include "Parser.h"
 #include "SValue.h"
+#include "Utility.h"
 
 #include <iostream>
+
+Environment createDefaultEnvironment()
+{
+  Environment env;
+  addCoreFunctions( env );
+  return env;
+}
 
 class InteractiveEvaluator
 {
 public:
   void runInteractiveMode()
   {
-    Environment globalEnv;
-    addCoreFunctions( globalEnv );
+    Environment globalEnv = createDefaultEnvironment();
+
+    {
+      auto root = makeDefaultSValue();
+      root->cells()->append( makeSValue( "standard/Standard.slisp" ) );
+      SValue* result = evalLoad( globalEnv, root.get() );
+      if ( result->isError() )
+      {
+        out << *result << '\n';
+      }
+    }
 
     out << std::boolalpha;
 
@@ -28,20 +45,21 @@ public:
         isDone = true;
         out << "Exiting...\n";
       }
+      else if ( input == "env" )
+      {
+        out << globalEnv << '\n';
+      }
       else
       {
         try
         {
           auto root = parse( input.cbegin(), input.cend() );
-          out << "Evaluation Tree\n";
-          out << *root << '\n';
-          show( out, *root ) << "\n\n";
+          out << "ast: ";
+          show( out, *root ) << '\n';
 
           auto result = evaluate( globalEnv, root.get() );
+          out << "==> ";
           show( out, *result ) << "\n\n";
-
-          out << "Evaluation Tree\n";
-          out << *root << '\n';
         }
         catch ( const std::exception& e )
         {
@@ -55,12 +73,25 @@ public:
   std::istream& in = std::cin;
 };
 
-int main()
+int main( int argc, char** argv )
 {
-  std::cout << "*hxor's LISP v0.0\n";
+  if ( argc >= 2 )
+  {
+    Environment globalEnv = createDefaultEnvironment();
 
-  InteractiveEvaluator runner;
-  runner.runInteractiveMode();
+    const std::string filename( argv[ 1 ] );
+    auto root = makeDefaultSValue();
+    root->cells()->append( makeSValue( filename ) );
+
+    SValue* result = evalLoad( globalEnv, root.get() );
+    std::cout << *result << '\n';
+  }
+  else
+  {
+    std::cout << "*hxor's LISP v0.0\n";
+    InteractiveEvaluator runner;
+    runner.runInteractiveMode();
+  }
 
   return 0;
 }

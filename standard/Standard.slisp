@@ -1,0 +1,138 @@
+
+; Standard Library
+; Common operations and atoms
+
+(def {nil} {})
+
+(def {fun} 
+  (\ {args body} 
+    {def (head args) (\ (tail args) body)
+}))
+
+; Unpack a list of arguments for a function.
+(fun {unpack f l} {
+    eval (join (list f) l)
+})
+
+; Pack a list of arguments for a function.
+(fun {pack f & xs} {f xs})
+
+(def {curry} unpack)
+(def {uncurry} pack)
+
+; Execute a sequence of operations
+( fun {do & l} { 
+    if (eq l nil) 
+      {nil} 
+      {last l} 
+})
+
+; Let scope
+(fun {let b} {
+   ( (\ {_} b) () )  
+})
+
+; flip function arguments
+(fun { flip f a b } { f b a })
+
+; Function composition
+(fun { comp f g x } { f (g x) })
+
+; Basic list accessors
+
+(fun { fst l } { eval (head l) })
+(fun { snd l } { eval (head (tail l)) })
+
+; List Operations
+
+; Nth item in list
+(fun {nth n l} { 
+   if (eq n 0)
+     {fst l}
+     {nth (- n 1) (tail l)}
+} )
+
+; List item in list
+(fun {last l} {
+   nth (- (len l) 1) l
+})
+
+; Take N items from list
+(fun {take n l} {
+   if (eq n 0)
+     {nil}
+     {join (head l) (take (- n 1) (tail l)) }
+})
+
+; Drop N items from list.
+(fun {drop n l} {
+   if (eq n 0) 
+     {l} 
+     {drop (- n 1) (tail l)}
+})
+
+; Split at Nth position
+(fun {split n l} {
+   list (take n l) (drop n l)
+})
+
+; Check if element is in the list
+(fun {elem x l} {
+   if (eq l nil) 
+     {false} 
+     { if (eq x (fst l)) {true} {elem x (tail l)}}
+})
+
+; Application
+
+; Apply function to list elements.
+(fun {map f l}{ 
+   if (eq l nil) 
+     {nil} 
+     {join (list (f (fst l))) (map f (tail l))}
+})
+
+; Filter list element.
+(fun {filter f l} {
+   if (eq l nil) 
+   {nil}
+   {join ( if ( f(fst l) ){head l} {nil} ) (filter f (tail l))}
+})
+
+; Accumulate value from operating on a list
+(fun {foldl f x l} {
+   if (eq l nil)
+     {x}                              ; final accumulated result
+     {foldl f (f x (fst l)) (tail l)} ; traverse the rest of the list with new accumulated value
+})
+
+(fun {sum l} {foldl + 0 l})
+(fun {product l} {foldl * 1 l})
+
+; Switch
+(fun {select & expr} {
+   if (eq expr nil) 
+     {error "Nothing to select"} 
+     {if (fst(fst expr)) {snd (fst expr)} {unpack select (tail expr)}}
+})
+
+; Can be used with switches
+(def {otherwise} true)
+
+; Matching
+(fun {case x & xs} {
+  if (eq xs nil) 
+    {error "No case found"} 
+    { if (eq x (fst (fst xs)) ) { snd (fst cs) } {
+      unpack case (join (list x) (tail xs) )
+    } }
+})
+
+; Fibonacci sequence
+(fun {fib n} {
+  select
+    { (< n 0) (error "Fibonacci expects natural numbers") }
+    { (eq n 0) 0 }
+    { (eq n 1) 1 }
+    { otherwise (+ (fib (- n 1) ) (fib (- n 2))) }
+})

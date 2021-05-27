@@ -4,8 +4,8 @@
 
 (def {nil} {})
 
-(def {fun} 
-  (\ {args body} 
+(def {fun}
+  (\ {args body}
     {def (head args) (\ (tail args) body)
 }))
 
@@ -21,15 +21,15 @@
 (def {uncurry} pack)
 
 ; Execute a sequence of operations
-( fun {do & l} { 
-    if (eq l nil) 
-      {nil} 
-      {last l} 
+( fun {do & l} {
+    if (eq l nil)
+      {nil}
+      {last l}
 })
 
 ; Let scope
 (fun {let b} {
-   ( (\ {_} b) () )  
+   ( (\ {_} b) () )
 })
 
 ; flip function arguments
@@ -46,7 +46,7 @@
 ; List Operations
 
 ; Nth item in list
-(fun {nth n l} { 
+(fun {nth n l} {
    if (eq n 0)
      {fst l}
      {nth (- n 1) (tail l)}
@@ -66,8 +66,8 @@
 
 ; Drop N items from list.
 (fun {drop n l} {
-   if (eq n 0) 
-     {l} 
+   if (eq n 0)
+     {l}
      {drop (- n 1) (tail l)}
 })
 
@@ -78,23 +78,23 @@
 
 ; Check if element is in the list
 (fun {elem x l} {
-   if (eq l nil) 
-     {false} 
+   if (eq l nil)
+     {false}
      { if (eq x (fst l)) {true} {elem x (tail l)}}
 })
 
 ; Application
 
 ; Apply function to list elements.
-(fun {map f l}{ 
-   if (eq l nil) 
-     {nil} 
+(fun {map f l}{
+   if (eq l nil)
+     {nil}
      {join (list (f (fst l))) (map f (tail l))}
 })
 
 ; Filter list element.
 (fun {filter f l} {
-   if (eq l nil) 
+   if (eq l nil)
    {nil}
    {join ( if ( f(fst l) ){head l} {nil} ) (filter f (tail l))}
 })
@@ -111,8 +111,8 @@
 
 ; Switch
 (fun {select & expr} {
-   if (eq expr nil) 
-     {error "Nothing to select"} 
+   if (eq expr nil)
+     {error "Nothing to select"}
      {if (fst(fst expr)) {snd (fst expr)} {unpack select (tail expr)}}
 })
 
@@ -121,8 +121,8 @@
 
 ; Matching
 (fun {case x & xs} {
-  if (eq xs nil) 
-    {error "No case found"} 
+  if (eq xs nil)
+    {error "No case found"}
     { if (eq x (fst (fst xs)) ) { snd (fst cs) } {
       unpack case (join (list x) (tail xs) )
     } }
@@ -135,4 +135,10 @@
     { (eq n 0) 0 }
     { (eq n 1) 1 }
     { otherwise (+ (fib (- n 1) ) (fib (- n 2))) }
+})
+
+(fun {range a b} {
+  if (eq a b)
+    {list b}
+    {join (list a) (range (+ a 1) b)}
 })

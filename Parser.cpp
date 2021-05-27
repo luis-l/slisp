@@ -203,9 +203,6 @@ std::unique_ptr< SValue > parse( IteratorT begin, IteratorT end )
       // Try to match numerics, symbols, comments, or string literals.
       else
       {
-        //auto contentEnd = std::find_if(
-        //  it, end, [ isParen, isBraces ]( unsigned char c ) { return isParen( c ) || isBraces( c ) || c == ';'; } );
-
         // Get the best matching regex. Ignores comments.
         using MatchResult = std::pair< std::size_t, std::string >;
         auto findMatch = []( IteratorT ibegin, IteratorT iend ) -> std::optional< MatchResult > {

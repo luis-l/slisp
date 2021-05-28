@@ -78,7 +78,9 @@ Value readValue( const std::string& text )
   }
   else if ( isStringLiteral( text ) )
   {
-    return text;
+    // String literal should already be quoted.
+    // Get the substring excluding the quote at the beginning and end.
+    return std::string( text.cbegin() + 1, text.cend() - 1 );
   }
   else
   {

@@ -95,6 +95,7 @@ void addCoreFunctions( Environment& e )
   e.set( loadSymbol, SValue( evalLoad ) );
   e.set( printSymbol, SValue( evalPrint ) );
   e.set( errorSymbol, SValue( evalError ) );
+  e.set( Symbol( "show" ), SValue( evalShow ) );
 }
 
 SValue* evaluate( Environment& e, SValue* v )

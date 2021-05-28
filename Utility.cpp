@@ -64,3 +64,15 @@ SValue* evalError( Environment& e, SValue* v )
 
   return error( v, errorMessage->get< std::string >() );
 }
+
+SValue* evalShow( Environment& e, SValue* v )
+{
+  REQUIRE( v, v->size() == 1, "show requires one argument" );
+
+  Cells& cells = v->cellsRequired();
+  std::unique_ptr< SValue > arg = cells.takeFront();
+  std::ostringstream ss;
+  show( ss, *arg );
+  v->value = ss.str();
+  return v;
+}

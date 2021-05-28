@@ -3,6 +3,7 @@
 #include "Traversal.h"
 
 #include <assert.h>
+#include <iomanip>
 #include <ostream>
 
 bool Error::operator==( const Error& e ) const
@@ -71,6 +72,10 @@ std::ostream& show( std::ostream& o, const SValue& r )
     o << '{';
     showExpression( o, r );
     o << '}';
+  }
+  else if ( r.isType< std::string >() )
+  {
+    o << std::quoted( r.get< std::string >() );
   }
   else
   {

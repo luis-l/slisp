@@ -52,24 +52,28 @@ public:
       if ( input == "exit" )
       {
         isDone = true;
-        out << "Exiting...\n";
+        out << "Exiting\n";
       }
       else if ( input == "env" )
       {
         // Special command to show the environment.
         out << env << '\n';
       }
+      else if ( input.empty() )
+      {
+        // Ignore blanks.
+        continue;
+      }
       else
       {
         try
         {
           auto root = parse( input.cbegin(), input.cend() );
-          out << "ast: ";
-          show( out, *root ) << '\n';
+          //out << "ast: ";
+          //show( out, *root ) << '\n';
 
           auto result = evaluate( env, root.get() );
-          out << "==> ";
-          show( out, *result ) << "\n\n";
+          show( out, *result ) << '\n';
         }
         catch ( const std::exception& e )
         {
@@ -87,7 +91,6 @@ int main( int argc, char** argv )
 {
   if ( argc >= 2 )
   {
-    std::cout << "Reading script...\n";
     Environment env = createDefaultEnvironment( std::cout );
 
     const std::string filename( argv[ 1 ] );
@@ -98,7 +101,6 @@ int main( int argc, char** argv )
     {
       SValue* result = evalLoad( env, root.get() );
       show( std::cout, *result ) << '\n';
-      std::cout << "Done...\n";
     }
     catch ( const std::exception& e )
     {
@@ -107,7 +109,7 @@ int main( int argc, char** argv )
   }
   else
   {
-    std::cout << "*hxor's LISP v0.0\n";
+    std::cout << "*hxor's LISP v0.1\n";
     InteractiveEvaluator runner;
     runner.runInteractiveMode();
   }

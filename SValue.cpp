@@ -59,9 +59,12 @@ std::ostream& show( std::ostream& o, const SValue& r )
 {
   if ( r.isSExpression() )
   {
-    o << '(';
-    showExpression( o, r );
-    o << ')';
+    if ( !r.isEmpty() )
+    {
+      o << '(';
+      showExpression( o, r );
+      o << ')';
+    }
   }
   else if ( r.isQExpression() )
   {

@@ -40,10 +40,8 @@ set_property(
   PROPERTY VS_STARTUP_PROJECT slisp )
 
 # Copy standard library
-add_custom_command( 
-  TARGET ${PROJECT_NAME} POST_BUILD
-  COMMAND ${CMAKE_COMMAND} -E copy_directory 
-    ${CMAKE_CURRENT_SOURCE_DIR}/standard
-    $<TARGET_FILE_DIR:${PROJECT_NAME}>/standard )
+file(
+  COPY ${CMAKE_CURRENT_SOURCE_DIR}/standard
+  DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
 
 # TODO: Add tests and install targets if needed.

@@ -6,6 +6,20 @@
 #include <stack>
 
 template < typename UnaryOp >
+void traversePreorder( SValue& r, UnaryOp f )
+{
+  std::stack< SValue* > traversal;
+  traversal.push( &r );
+  while ( !traversal.empty() )
+  {
+    SValue* n = traversal.top();
+    traversal.pop();
+    f( *n );
+    n->foreachCell( [ &traversal ]( SValue& child ) { traversal.push( &child ); } );
+  }
+}
+
+template < typename UnaryOp >
 void traversePreorder( const SValue& r, UnaryOp f )
 {
   std::stack< const SValue* > traversal;

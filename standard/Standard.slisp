@@ -77,11 +77,24 @@
 })
 
 ; Check if element is in the list
+; BUG , since foldl uses x as arg, using x in elem causes a scope bug
+; yy is used to avoid conflict.
+; This can only be fixed with lexical (static) scoping. Current implementation is dynamic.
+;; (fun {elem x l} { foldl (\ {acc i} { if (eq x i) {true} {acc} } ) false l})
 (fun {elem x l} {
-   if (eq l nil)
-     {false}
-     { if (eq x (fst l)) {true} {elem x (tail l)}}
-})
+  do
+  ; wrap eq, cannot partially evaluate built-in functions for now.
+  (= {equal} (\ {x y} {eq x y}) )
+
+  ; This must be done so X is binded to the correct argument before foldl.
+  ; It will execute the S-expression and store it in isX.
+  (= {isX} (equal x) )
+
+  (foldl
+    (\ {acc i} {if (isX i) {true} {acc} })
+    false
+    l
+)})
 
 ; Application
 
@@ -104,6 +117,14 @@
    if (eq l nil)
      {x}                              ; final accumulated result
      {foldl f (f x (fst l)) (tail l)} ; traverse the rest of the list with new accumulated value
+})
+
+; Like foldl but returns intermediate values.
+; (b -> a -> b) -> b -> [a] -> [b]
+(fun {scanl f x l} {
+   if (eq l nil)
+     {list x}
+     {join (list x) (scanl f (f x (fst l)) (tail l)) };
 })
 
 (fun {sum l} {foldl + 0 l})

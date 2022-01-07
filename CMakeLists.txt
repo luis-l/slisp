@@ -39,6 +39,12 @@ set_property(
   ${CMAKE_CURRENT_SOURCE_DIR}
   PROPERTY VS_STARTUP_PROJECT slisp )
 
+add_custom_command( 
+  TARGET ${PROJECT_NAME} POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E copy_directory 
+    ${CMAKE_CURRENT_SOURCE_DIR}/standard
+    $<TARGET_FILE_DIR:${PROJECT_NAME}>/standard )
+
 # Copy standard library
 file(
   COPY ${CMAKE_CURRENT_SOURCE_DIR}/standard

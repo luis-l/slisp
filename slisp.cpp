@@ -29,7 +29,14 @@ Environment createDefaultEnvironment( std::ostream& out )
 {
   Environment env;
   addCoreFunctions( env );
-  loadStandardLibrary( env, out );
+  try
+  {
+    loadStandardLibrary( env, out );
+  }
+  catch ( const std::exception& e )
+  {
+    out << e.what() << '\n';
+  }
   return env;
 }
 
@@ -69,7 +76,8 @@ public:
         try
         {
           auto root = parse( input.cbegin(), input.cend() );
-          //out << "ast: ";
+          out << "ast:\n";
+          out << *root << '\n';
           //show( out, *root ) << '\n';
 
           auto result = evaluate( env, root.get() );
